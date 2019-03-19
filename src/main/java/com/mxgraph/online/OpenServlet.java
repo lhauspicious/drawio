@@ -31,8 +31,6 @@ import org.apache.commons.lang3.StringEscapeUtils;
 
 import com.mxgraph.io.mxCodec;
 import com.mxgraph.io.mxGraphMlCodec;
-import com.mxgraph.io.mxVsdxCodec;
-import com.mxgraph.io.mxVssxCodec;
 import com.mxgraph.io.gliffy.importer.GliffyDiagramConverter;
 import com.mxgraph.util.mxXmlUtils;
 import com.mxgraph.view.mxGraph;
@@ -52,14 +50,9 @@ public class OpenServlet extends HttpServlet
 			.getName());
 
 	/**
-	 * Global switch to enabled VSDX support.
+	 * 
 	 */
-	public static boolean ENABLE_VSDX_SUPPORT = true;
-
-	/**
-	 * Global switch to enabled VSSX support.
-	 */
-	public static boolean ENABLE_VSSX_SUPPORT = true;
+	public static String CHARSET_FOR_STRING_URL_ENCODING = "UTF-8";
 
 	/**
 	 * Global switch to enabled Gliffy support.
@@ -114,8 +107,6 @@ public class OpenServlet extends HttpServlet
 				String filename = "";
 				String format = null;
 				String upfile = null;
-				boolean vsdx = false;
-				boolean vssx = false;
 
 				ServletFileUpload upload = new ServletFileUpload();
 				FileItemIterator iterator = upload.getItemIterator(request);
@@ -133,18 +124,8 @@ public class OpenServlet extends HttpServlet
 					else if (name.equals("upfile"))
 					{
 						filename = item.getName();
-						vsdx = filename.toLowerCase().endsWith(".vsdx");
-						vssx = filename.toLowerCase().endsWith(".vssx");
-
-						if (vsdx || vssx)
-						{
-							upfile = Streams.asString(stream, "ISO-8859-1");
-						}
-						else
-						{
-							upfile = Streams.asString(stream,
-									Utils.CHARSET_FOR_URL_ENCODING);
-						}
+						upfile = Streams.asString(stream,
+								Utils.CHARSET_FOR_URL_ENCODING);
 					}
 				}
 
@@ -165,41 +146,24 @@ public class OpenServlet extends HttpServlet
 					xml = extractXmlFromPng(
 							upfile.getBytes(Utils.CHARSET_FOR_URL_ENCODING));
 				}
-				else if (ENABLE_GRAPHML_SUPPORT && upfile.matches(graphMlRegex))
+				else if (upfile != null)
 				{
-					// Creates a graph that contains a model but does not validate
-					// since that is not needed for the model and not allowed on GAE
-					mxGraph graph = new mxGraphHeadless();
-
-					mxGraphMlCodec.decode(mxXmlUtils.parseXml(upfile), graph);
-					xml = mxXmlUtils
-							.getXml(new mxCodec().encode(graph.getModel()));
-				}
-				else if (ENABLE_VSDX_SUPPORT && vsdx)
-				{
-					mxVsdxCodec vdxCodec = new mxVsdxCodec();
-					xml = vdxCodec.decodeVsdx(upfile.getBytes("ISO-8859-1"),
-							Utils.CHARSET_FOR_URL_ENCODING);
-
-					// Replaces VSDX extension
-					int dot = filename.lastIndexOf('.');
-					filename = filename.substring(0, dot + 1) + "xml";
-				}
-				else if (ENABLE_VSSX_SUPPORT && vssx)
-				{
-					mxVssxCodec vssxCodec = new mxVssxCodec();
-					xml = vssxCodec.decodeVssx(upfile.getBytes("ISO-8859-1"),
-							Utils.CHARSET_FOR_URL_ENCODING);
-
-					// Replaces VSDX extension
-					int dot = filename.lastIndexOf('.');
-					filename = filename.substring(0, dot + 1) + "xml";
-				}
-				else if (ENABLE_GLIFFY_SUPPORT && upfile.matches(gliffyRegex))
-				{
-					GliffyDiagramConverter converter = new GliffyDiagramConverter(
-							upfile);
-					xml = converter.getGraphXml();
+					if (ENABLE_GRAPHML_SUPPORT && upfile.matches(graphMlRegex))
+					{
+						// Creates a graph that contains a model but does not validate
+						// since that is not needed for the model and not allowed on GAE
+						mxGraph graph = new mxGraphHeadless();
+	
+						mxGraphMlCodec.decode(mxXmlUtils.parseXml(upfile), graph);
+						xml = mxXmlUtils
+								.getXml(new mxCodec().encode(graph.getModel()));
+					}
+					else if (ENABLE_GLIFFY_SUPPORT && upfile.matches(gliffyRegex))
+					{
+						GliffyDiagramConverter converter = new GliffyDiagramConverter(
+								upfile);
+						xml = converter.getGraphXml();
+					}
 				}
 
 				// Fallback to old data parameter
@@ -251,6 +215,12 @@ public class OpenServlet extends HttpServlet
 						"window.parent.showOpenAlert(window.parent.mxResources.get('drawingTooLarge'));");
 			}
 		}
+		catch (OutOfMemoryError e)
+		{
+			response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+			writeScript(writer,
+					"window.parent.showOpenAlert('Out of memory');");
+		}
 		catch (Exception e)
 		{
 			StringWriter errors = new StringWriter();
@@ -271,7 +241,7 @@ public class OpenServlet extends HttpServlet
 	protected String encodeString(String s)
 	{
 		return StringEscapeUtils.escapeEcmaScript(
-				Utils.encodeURIComponent(s, Utils.CHARSET_FOR_URL_ENCODING));
+				Utils.encodeURIComponent(s, CHARSET_FOR_STRING_URL_ENCODING));
 	};
 
 	/**

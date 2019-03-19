@@ -390,9 +390,9 @@ function VsdxExport(editorUi)
 
 	function createEdge(cell, graph, xmlDoc, parentHeight, isChild)
 	{
-		var state = graph.view.getState(cell);
+		var state = graph.view.getState(cell, true);
 		
-		if (state == null)
+		if (state == null || state.absolutePoints == null || state.cellBounds == null)
 		{
 			return null;
 		}
@@ -531,16 +531,23 @@ function VsdxExport(editorUi)
 				var subShape = convertMxCell2Shape(cell, graph, xmlDoc, geo.height, geo, true);
 				cell.treatAsSingle = false;
 				cell.setGeometry(geo);
-				gShapes.appendChild(subShape);
+				
+				if (subShape != null)
+				{
+					gShapes.appendChild(subShape);
+				}
 				
 				//add group children
-				for (var i = 0; i < cell.children.length; i++)
+				for (var i = 0; i < cell.getChildCount(); i++)
 				{
 					var child = cell.children[i];
 					
 					var subShape = convertMxCell2Shape(child, graph, xmlDoc, geo.height, geo, true);
 					
-					gShapes.appendChild(subShape);
+					if (subShape != null)
+					{
+						gShapes.appendChild(subShape);
+					}
 				}
 				
 				shape.appendChild(gShapes);
@@ -555,7 +562,7 @@ function VsdxExport(editorUi)
 	
 				var shape = createShape(vsdxId, geo, xmlDoc, parentHeight, isChild);
 				
-				var state = graph.view.getState(cell);
+				var state = graph.view.getState(cell, true);
 
 				applyMxCellStyle(state, shape, xmlDoc);
 				
@@ -600,9 +607,8 @@ function VsdxExport(editorUi)
 
         var root = createElt(xmlDoc, that.XMLNS, "PageContents");
         
-        // LATER: Fix NS1, NS2... namespaces in IE11-
-        root.setAttribute("xmlns:r", that.XMLNS_R);
-        root.setAttribute("xml:space", that.XML_SPACE);
+        root.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', that.XMLNS);
+        root.setAttributeNS('http://www.w3.org/2000/xmlns/', "xmlns:r", that.XMLNS_R);
         
         var shapes = createElt(xmlDoc, that.XMLNS, "Shapes");
         root.appendChild(shapes);
@@ -689,8 +695,8 @@ function VsdxExport(editorUi)
 		var pagesRelsXmlDoc = mxUtils.createXmlDocument();
 	
 		var pagesRoot = createElt(pagesXmlDoc, that.XMLNS, "Pages");
-		pagesRoot.setAttribute("xmlns:r", that.XMLNS_R);
-		pagesRoot.setAttribute("xml:space", that.XML_SPACE);
+		pagesRoot.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', that.XMLNS);
+		pagesRoot.setAttributeNS('http://www.w3.org/2000/xmlns/', "xmlns:r", that.XMLNS_R);
 
 		var pagesRelsRoot = createElt(pagesRelsXmlDoc, that.RELS_XMLNS, "Relationships");
 		
@@ -713,7 +719,7 @@ function VsdxExport(editorUi)
 			pageSheet.appendChild(createCellElem("DrawingScale", 1, pagesXmlDoc));
 		
 			var relE = createElt(pagesXmlDoc, that.XMLNS,"Rel");
-			relE.setAttribute("r:id", "rId" + i);
+			relE.setAttributeNS(that.XMLNS_R, "r:id", "rId" + i);
 
 			//Layer (not needed!, it works without it)
 			var layerSec = createElt(pagesXmlDoc, that.XMLNS, "Section");
@@ -890,6 +896,7 @@ function VsdxExport(editorUi)
 		catch(e) 
 		{
 			console.log(e);
+			editorUi.spinner.stop();
 			return false;
 		}
 	};	

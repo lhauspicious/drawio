@@ -25,7 +25,17 @@ Format.prototype.showCloseButton = true;
 /**
  * Background color for inactive tabs.
  */
-Format.prototype.inactiveTabBackgroundColor = '#d7d7d7';
+Format.prototype.inactiveTabBackgroundColor = '#f1f3f4';
+
+/**
+ * Background color for inactive tabs.
+ */
+Format.prototype.roundableShapes = ['label', 'rectangle', 'internalStorage', 'corner',
+	'parallelogram', 'swimlane', 'triangle', 'trapezoid',
+	'ext', 'step', 'tee', 'process', 'link',
+	'rhombus', 'offPageConnector', 'loopLimit', 'hexagon',
+	'manualInput', 'curlyBracket', 'singleArrow', 'callout',
+	'doubleArrow', 'flexArrow', 'card', 'umlLifeline'];
 
 /**
  * Adds the label menu items to the given menu and parent.
@@ -47,6 +57,11 @@ Format.prototype.init = function()
 	graph.addListener(mxEvent.EDITING_STOPPED, this.update);
 	graph.getModel().addListener(mxEvent.CHANGE, this.update);
 	graph.addListener(mxEvent.ROOT, mxUtils.bind(this, function()
+	{
+		this.refresh();
+	}));
+	
+	editor.addListener('autosaveChanged', mxUtils.bind(this, function()
 	{
 		this.refresh();
 	}));
@@ -240,14 +255,9 @@ Format.prototype.isGlassState = function(state)
  */
 Format.prototype.isRoundedState = function(state)
 {
-	var shape = mxUtils.getValue(state.style, mxConstants.STYLE_SHAPE, null);
-	
-	return (shape == 'label' || shape == 'rectangle' || shape == 'internalStorage' || shape == 'corner' ||
-			shape == 'parallelogram' || shape == 'swimlane' || shape == 'triangle' || shape == 'trapezoid' ||
-			shape == 'ext' || shape == 'step' || shape == 'tee' || shape == 'process' || shape == 'link' ||
-			shape == 'rhombus' || shape == 'offPageConnector' || shape == 'loopLimit' || shape == 'hexagon' ||
-			shape == 'manualInput' || shape == 'curlyBracket' || shape == 'singleArrow' || shape == 'callout' ||
-			shape == 'doubleArrow' || shape == 'flexArrow' || shape == 'card' || shape == 'umlLifeline');
+	return (state.shape != null) ? state.shape.isRoundable() :
+		mxUtils.indexOf(this.roundableShapes, mxUtils.getValue(state.style,
+		mxConstants.STYLE_SHAPE, null)) >= 0;
 };
 
 /**
@@ -256,8 +266,9 @@ Format.prototype.isRoundedState = function(state)
 Format.prototype.isLineJumpState = function(state)
 {
 	var shape = mxUtils.getValue(state.style, mxConstants.STYLE_SHAPE, null);
+	var curved = mxUtils.getValue(state.style, mxConstants.STYLE_CURVED, false);
 	
-	return shape == 'connector' || shape == 'filledEdge';
+	return !curved && (shape == 'connector' || shape == 'filledEdge');
 };
 
 /**
@@ -343,20 +354,30 @@ Format.prototype.refresh = function()
 	div.style.cursor = 'default';
 	
 	var label = document.createElement('div');
-	label.style.border = '1px solid #c0c0c0';
-	label.style.borderWidth = '0px 0px 1px 0px';
+	label.className = 'geFormatSection';
 	label.style.textAlign = 'center';
 	label.style.fontWeight = 'bold';
-	label.style.overflow = 'hidden';
-	label.style.display = (mxClient.IS_QUIRKS) ? 'inline' : 'inline-block';
 	label.style.paddingTop = '8px';
+	label.style.fontSize = '13px';
+	label.style.borderWidth = '0px 0px 1px 1px';
+	label.style.borderStyle = 'solid';
+	label.style.display = (mxClient.IS_QUIRKS) ? 'inline' : 'inline-block';
 	label.style.height = (mxClient.IS_QUIRKS) ? '34px' : '25px';
+	label.style.overflow = 'hidden';
 	label.style.width = '100%';
 	this.container.appendChild(div);
+	
+	// Prevents text selection
+    mxEvent.addListener(label, (mxClient.IS_POINTER) ? 'pointerdown' : 'mousedown',
+        mxUtils.bind(this, function(evt)
+	{
+		evt.preventDefault();
+	}));
 	
 	if (graph.isSelectionEmpty())
 	{
 		mxUtils.write(label, mxResources.get('diagram'));
+		label.style.borderLeftWidth = '0px';
 		
 		// Adds button to hide the format panel since
 		// people don't seem to find the toolbar button
@@ -440,6 +461,13 @@ Format.prototype.refresh = function()
 			
 			mxEvent.addListener(elt, 'click', clickHandler);
 			
+			// Prevents text selection
+		    mxEvent.addListener(elt, (mxClient.IS_POINTER) ? 'pointerdown' : 'mousedown',
+	        	mxUtils.bind(this, function(evt)
+	    	{
+				evt.preventDefault();
+			}));
+			
 			if (index == ((containsLabel) ? this.labelIndex : this.currentIndex))
 			{
 				// Invokes handler directly as a workaround for no click on DIV in KHTML.
@@ -451,6 +479,7 @@ Format.prototype.refresh = function()
 
 		label.style.backgroundColor = this.inactiveTabBackgroundColor;
 		label.style.borderLeftWidth = '1px';
+		label.style.cursor = 'pointer';
 		label.style.width = (containsLabel) ? '50%' : '33.3%';
 		label.style.width = (containsLabel) ? '50%' : '33.3%';
 		var label2 = label.cloneNode(false);
@@ -671,8 +700,8 @@ BaseFormatPanel.prototype.installInputHandler = function(input, key, defaultValu
 BaseFormatPanel.prototype.createPanel = function()
 {
 	var div = document.createElement('div');
+	div.className = 'geFormatSection';
 	div.style.padding = '12px 0px 12px 18px';
-	div.style.borderBottom = '1px solid #c0c0c0';
 	
 	return div;
 };
@@ -888,8 +917,6 @@ BaseFormatPanel.prototype.createOption = function(label, isCheckedFn, setChecked
 			
 			apply(cb.checked);
 		}
-		
-		mxEvent.consume(evt);
 	});
 	
 	apply(value);
@@ -1270,7 +1297,7 @@ BaseFormatPanel.prototype.createRelativeOption = function(label, key, width, han
 	mxUtils.write(div, label);
 	div.style.fontWeight = 'bold';
 	
-	function update(evt)
+	var update = mxUtils.bind(this, function(evt)
 	{
 		if (handler != null)
 		{
@@ -1291,13 +1318,15 @@ BaseFormatPanel.prototype.createRelativeOption = function(label, key, width, han
 				}
 				
 				graph.setCellStyles(key, value, graph.getSelectionCells());
+				this.editorUi.fireEvent(new mxEventObject('styleChanged', 'keys', [key],
+					'values', [value], 'cells', graph.getSelectionCells()));
 			}
 	
 			input.value = ((value != null) ? value : '100') + ' %';
 		}
 		
 		mxEvent.consume(evt);
-	};
+	});
 
 	var input = this.addUnitInput(div, '%', 20, width, update, 10, -15, handler != null);
 
@@ -1530,11 +1559,53 @@ ArrangePanel.prototype.addGroupOps = function(div)
 			ui.actions.get('ungroup').funct();
 		})
 		
-		btn.setAttribute('title', mxResources.get('ungroup') + ' (' + this.editorUi.actions.get('ungroup').shortcut + ')');
+		btn.setAttribute('title', mxResources.get('ungroup') + ' (' +
+			this.editorUi.actions.get('ungroup').shortcut + ')');
 		btn.style.width = '202px';
 		btn.style.marginBottom = '2px';
 		div.appendChild(btn);
 		count++;
+	}
+	
+	if (ss.vertices.length > 0)
+	{
+		if (count > 0)
+		{
+			mxUtils.br(div);
+			count = 0;
+		}
+		
+		var btn = mxUtils.button(mxResources.get('copySize'), function(evt)
+		{
+			ui.actions.get('copySize').funct();
+		});
+		
+		btn.setAttribute('title', mxResources.get('copySize') + ' (' +
+			this.editorUi.actions.get('copySize').shortcut + ')');
+		btn.style.width = '202px';
+		btn.style.marginBottom = '2px';
+
+		div.appendChild(btn);
+		count++;
+		
+		if (ui.copiedSize != null)
+		{
+			var btn2 = mxUtils.button(mxResources.get('pasteSize'), function(evt)
+			{
+				ui.actions.get('pasteSize').funct();
+			});
+			
+			btn2.setAttribute('title', mxResources.get('pasteSize') + ' (' +
+				this.editorUi.actions.get('pasteSize').shortcut + ')');
+			
+			div.appendChild(btn2);
+			count++;
+			
+			btn.style.width = '100px';
+			btn.style.marginBottom = '2px';
+			btn2.style.width = '100px';
+			btn2.style.marginBottom = '2px';
+		}
 	}
 	
 	if (graph.getSelectionCount() == 1 && graph.getModel().isVertex(cell) &&
@@ -2046,7 +2117,11 @@ ArrangePanel.prototype.addGeometryHandler = function(input, fn)
 		{
 			var value = parseFloat(input.value);
 
-			if (value != initialValue)
+			if (isNaN(value)) 
+			{
+				input.value = initialValue + ' pt';
+			}
+			else if (value != initialValue)
 			{
 				graph.getModel().beginUpdate();
 				try
@@ -2076,10 +2151,6 @@ ArrangePanel.prototype.addGeometryHandler = function(input, fn)
 				
 				initialValue = value;
 				input.value = value + ' pt';
-			}
-			else if (isNaN(value)) 
-			{
-				input.value = initialValue + ' pt';
 			}
 		}
 		
@@ -2393,7 +2464,7 @@ TextFormatPanel.prototype.addFont = function(container)
 		var cssPanel = stylePanel.cloneNode();
 		
 		var cssMenu = this.editorUi.toolbar.addMenu(mxResources.get('style'),
-			mxResources.get('style'), true, 'formatBlock', cssPanel);
+			mxResources.get('style'), true, 'formatBlock', cssPanel, null, true);
 		cssMenu.style.color = 'rgb(112, 112, 112)';
 		cssMenu.style.whiteSpace = 'nowrap';
 		cssMenu.style.overflow = 'hidden';
@@ -2420,8 +2491,9 @@ TextFormatPanel.prototype.addFont = function(container)
 	colorPanel.style.borderTop = '1px solid #c0c0c0';
 	colorPanel.style.paddingTop = '6px';
 	colorPanel.style.paddingBottom = '6px';
-
-	var fontMenu = this.editorUi.toolbar.addMenu('Helvetica', mxResources.get('fontFamily'), true, 'fontFamily', stylePanel);
+	
+	var fontMenu = this.editorUi.toolbar.addMenu('Helvetica', mxResources.get('fontFamily'),
+		true, 'fontFamily', stylePanel, null, true);
 	fontMenu.style.color = 'rgb(112, 112, 112)';
 	fontMenu.style.whiteSpace = 'nowrap';
 	fontMenu.style.overflow = 'hidden';
@@ -2470,34 +2542,42 @@ TextFormatPanel.prototype.addFont = function(container)
 	};
 	
 	var left = this.editorUi.toolbar.addButton('geSprite-left', mxResources.get('left'),
-			(graph.cellEditor.isContentEditing()) ?
-			function()
-			{
-				document.execCommand('justifyleft', false, null);
-			} : callFn(this.editorUi.menus.createStyleChangeFunction([mxConstants.STYLE_ALIGN], [mxConstants.ALIGN_LEFT])), stylePanel3);
+		(graph.cellEditor.isContentEditing()) ?
+		function()
+		{
+			document.execCommand('justifyleft', false, null);
+		} : callFn(this.editorUi.menus.createStyleChangeFunction([mxConstants.STYLE_ALIGN], [mxConstants.ALIGN_LEFT])), stylePanel3);
 	var center = this.editorUi.toolbar.addButton('geSprite-center', mxResources.get('center'),
-			(graph.cellEditor.isContentEditing()) ?
-			function()
-			{
-				document.execCommand('justifycenter', false, null);
-			} : callFn(this.editorUi.menus.createStyleChangeFunction([mxConstants.STYLE_ALIGN], [mxConstants.ALIGN_CENTER])), stylePanel3);
+		(graph.cellEditor.isContentEditing()) ?
+		function()
+		{
+			document.execCommand('justifycenter', false, null);
+		} : callFn(this.editorUi.menus.createStyleChangeFunction([mxConstants.STYLE_ALIGN], [mxConstants.ALIGN_CENTER])), stylePanel3);
 	var right = this.editorUi.toolbar.addButton('geSprite-right', mxResources.get('right'),
-			(graph.cellEditor.isContentEditing()) ?
-			function()
-			{
-				document.execCommand('justifyright', false, null);
-			} : callFn(this.editorUi.menus.createStyleChangeFunction([mxConstants.STYLE_ALIGN], [mxConstants.ALIGN_RIGHT])), stylePanel3);
+		(graph.cellEditor.isContentEditing()) ?
+		function()
+		{
+			document.execCommand('justifyright', false, null);
+		} : callFn(this.editorUi.menus.createStyleChangeFunction([mxConstants.STYLE_ALIGN], [mxConstants.ALIGN_RIGHT])), stylePanel3);
 
 	this.styleButtons([left, center, right]);
-
+	
+	// Quick hack for strikethrough
+	// TODO: Add translations and toggle state
 	if (graph.cellEditor.isContentEditing())
 	{
-		var clear = this.editorUi.toolbar.addButton('geSprite-removeformat', mxResources.get('removeFormat'),
+		var strike = this.editorUi.toolbar.addButton('geSprite-removeformat', mxResources.get('strikethrough'),
 			function()
 			{
-				document.execCommand('removeformat', false, null);
+				document.execCommand('strikeThrough', false, null);
 			}, stylePanel2);
-		this.styleButtons([clear]);
+		this.styleButtons([strike]);
+
+		strike.firstChild.style.background = 'url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PHBhdGggaWQ9ImEiIGQ9Ik0wIDBoMjR2MjRIMFYweiIvPjwvZGVmcz48Y2xpcFBhdGggaWQ9ImIiPjx1c2UgeGxpbms6aHJlZj0iI2EiIG92ZXJmbG93PSJ2aXNpYmxlIi8+PC9jbGlwUGF0aD48cGF0aCBjbGlwLXBhdGg9InVybCgjYikiIGZpbGw9IiMwMTAxMDEiIGQ9Ik03LjI0IDguNzVjLS4yNi0uNDgtLjM5LTEuMDMtLjM5LTEuNjcgMC0uNjEuMTMtMS4xNi40LTEuNjcuMjYtLjUuNjMtLjkzIDEuMTEtMS4yOS40OC0uMzUgMS4wNS0uNjMgMS43LS44My42Ni0uMTkgMS4zOS0uMjkgMi4xOC0uMjkuODEgMCAxLjU0LjExIDIuMjEuMzQuNjYuMjIgMS4yMy41NCAxLjY5Ljk0LjQ3LjQuODMuODggMS4wOCAxLjQzLjI1LjU1LjM4IDEuMTUuMzggMS44MWgtMy4wMWMwLS4zMS0uMDUtLjU5LS4xNS0uODUtLjA5LS4yNy0uMjQtLjQ5LS40NC0uNjgtLjItLjE5LS40NS0uMzMtLjc1LS40NC0uMy0uMS0uNjYtLjE2LTEuMDYtLjE2LS4zOSAwLS43NC4wNC0xLjAzLjEzLS4yOS4wOS0uNTMuMjEtLjcyLjM2LS4xOS4xNi0uMzQuMzQtLjQ0LjU1LS4xLjIxLS4xNS40My0uMTUuNjYgMCAuNDguMjUuODguNzQgMS4yMS4zOC4yNS43Ny40OCAxLjQxLjdINy4zOWMtLjA1LS4wOC0uMTEtLjE3LS4xNS0uMjV6TTIxIDEydi0ySDN2Mmg5LjYyYy4xOC4wNy40LjE0LjU1LjIuMzcuMTcuNjYuMzQuODcuNTEuMjEuMTcuMzUuMzYuNDMuNTcuMDcuMi4xMS40My4xMS42OSAwIC4yMy0uMDUuNDUtLjE0LjY2LS4wOS4yLS4yMy4zOC0uNDIuNTMtLjE5LjE1LS40Mi4yNi0uNzEuMzUtLjI5LjA4LS42My4xMy0xLjAxLjEzLS40MyAwLS44My0uMDQtMS4xOC0uMTNzLS42Ni0uMjMtLjkxLS40MmMtLjI1LS4xOS0uNDUtLjQ0LS41OS0uNzUtLjE0LS4zMS0uMjUtLjc2LS4yNS0xLjIxSDYuNGMwIC41NS4wOCAxLjEzLjI0IDEuNTguMTYuNDUuMzcuODUuNjUgMS4yMS4yOC4zNS42LjY2Ljk4LjkyLjM3LjI2Ljc4LjQ4IDEuMjIuNjUuNDQuMTcuOS4zIDEuMzguMzkuNDguMDguOTYuMTMgMS40NC4xMy44IDAgMS41My0uMDkgMi4xOC0uMjhzMS4yMS0uNDUgMS42Ny0uNzljLjQ2LS4zNC44Mi0uNzcgMS4wNy0xLjI3cy4zOC0xLjA3LjM4LTEuNzFjMC0uNi0uMS0xLjE0LS4zMS0xLjYxLS4wNS0uMTEtLjExLS4yMy0uMTctLjMzSDIxeiIvPjwvc3ZnPg==)';
+		strike.firstChild.style.backgroundPosition = '2px 2px';
+		strike.firstChild.style.backgroundSize = '18px 18px';
+
+		this.styleButtons([strike]);
 	}
 	
 	var top = this.editorUi.toolbar.addButton('geSprite-top', mxResources.get('top'),
@@ -2527,7 +2607,7 @@ TextFormatPanel.prototype.addFont = function(container)
 		bottom.style.display = 'none';
 		verticalItem.style.display = 'none';
 		
-		full = this.editorUi.toolbar.addButton('geSprite-justifyfull', null,
+		full = this.editorUi.toolbar.addButton('geSprite-justifyfull', mxResources.get('block'),
 			function()
 			{
 				document.execCommand('justifyfull', false, null);
@@ -2559,14 +2639,19 @@ TextFormatPanel.prototype.addFont = function(container)
 					document.execCommand('insertunorderedlist', false, null);
 				}, tmp),
 			this.editorUi.toolbar.addButton('geSprite-outdent', mxResources.get('decreaseIndent'),
-					function()
-					{
-						document.execCommand('outdent', false, null);
-					}, tmp),
+				function()
+				{
+					document.execCommand('outdent', false, null);
+				}, tmp),
 			this.editorUi.toolbar.addButton('geSprite-indent', mxResources.get('increaseIndent'),
 				function()
 				{
 					document.execCommand('indent', false, null);
+				}, tmp),
+			this.editorUi.toolbar.addButton('geSprite-removeformat', mxResources.get('removeFormat'),
+				function()
+				{
+					document.execCommand('removeformat', false, null);
 				}, tmp),
 			this.editorUi.toolbar.addButton('geSprite-code', mxResources.get('html'),
 				function()
@@ -2574,7 +2659,7 @@ TextFormatPanel.prototype.addFont = function(container)
 					graph.cellEditor.toggleViewMode();
 				}, tmp)];
 		this.styleButtons(btns);
-		btns[btns.length - 1].style.marginLeft = '9px';
+		btns[btns.length - 2].style.marginLeft = '9px';
 		
 		if (mxClient.IS_QUIRKS)
 		{
@@ -2733,7 +2818,8 @@ TextFormatPanel.prototype.addFont = function(container)
 
 			function updateSize(elt, ignoreContains)
 			{
-				if (elt != graph.cellEditor.textarea && (ignoreContains || selection.containsNode(elt, true)))
+				if (elt != graph.cellEditor.textarea && graph.cellEditor.textarea.contains(elt) &&
+					(ignoreContains || selection.containsNode(elt, true)))
 				{
 					if (elt.nodeName == 'FONT')
 					{
@@ -2771,7 +2857,7 @@ TextFormatPanel.prototype.addFont = function(container)
 				container = container.parentNode;
 			}
 			
-			if (container.nodeType == mxConstants.NODETYPE_ELEMENT)
+			if (container != null && container.nodeType == mxConstants.NODETYPE_ELEMENT)
 			{
 				var elts = container.getElementsByTagName('*');
 				updateSize(container);
@@ -2784,30 +2870,66 @@ TextFormatPanel.prototype.addFont = function(container)
 
 			input.value = fontSize + ' pt';
 		}
-		else
+		else if (window.getSelection || document.selection)
 		{
-			pendingFontSize = fontSize;
+			// Checks selection
+			var par = null;
 			
-			// Workaround for can't set font size in px is to change font size afterwards
-			document.execCommand('fontSize', false, '4');
-			var elts = graph.cellEditor.textarea.getElementsByTagName('font');
-			
-			for (var i = 0; i < elts.length; i++)
+			if (document.selection)
 			{
-				if (elts[i].getAttribute('size') == '4')
+				par = document.selection.createRange().parentElement();
+			}
+			else
+			{
+				var selection = window.getSelection();
+				
+				if (selection.rangeCount > 0)
 				{
-					elts[i].removeAttribute('size');
-					elts[i].style.fontSize = pendingFontSize + 'px';
-		
-					// Overrides fontSize in input with the one just assigned as a workaround
-					// for potential fontSize values of parent elements that don't match
-					window.setTimeout(function()
+					par = selection.getRangeAt(0).commonAncestorContainer;
+				}
+			}
+			
+			// Node.contains does not work for text nodes in IE11
+			function isOrContains(container, node)
+			{
+			    while (node != null)
+			    {
+			        if (node === container)
+			        {
+			            return true;
+			        }
+			        
+			        node = node.parentNode;
+			    }
+			    
+			    return false;
+			};
+			
+			if (par != null && isOrContains(graph.cellEditor.textarea, par))
+			{
+				pendingFontSize = fontSize;
+				
+				// Workaround for can't set font size in px is to change font size afterwards
+				document.execCommand('fontSize', false, '4');
+				var elts = graph.cellEditor.textarea.getElementsByTagName('font');
+				
+				for (var i = 0; i < elts.length; i++)
+				{
+					if (elts[i].getAttribute('size') == '4')
 					{
-						input.value = pendingFontSize + ' pt';
-						pendingFontSize = null;
-					}, 0);
-					
-					break;
+						elts[i].removeAttribute('size');
+						elts[i].style.fontSize = pendingFontSize + 'px';
+			
+						// Overrides fontSize in input with the one just assigned as a workaround
+						// for potential fontSize values of parent elements that don't match
+						window.setTimeout(function()
+						{
+							input.value = pendingFontSize + ' pt';
+							pendingFontSize = null;
+						}, 0);
+						
+						break;
+					}
 				}
 			}
 		}
@@ -3013,7 +3135,7 @@ TextFormatPanel.prototype.addFont = function(container)
 				node = graph.cellEditor.textarea.firstChild;
 			}
 			
-			if (node != null && node != graph.cellEditor.textarea)
+			if (node != null && node != graph.cellEditor.textarea && graph.cellEditor.textarea.contains(node))
 			{
 				node.style.lineHeight = value + '%';
 			}
@@ -3079,37 +3201,37 @@ TextFormatPanel.prototype.addFont = function(container)
 		
 		var btns = [
 		        this.editorUi.toolbar.addButton('geSprite-insertcolumnbefore', mxResources.get('insertColumnBefore'),
-				function()
+	     		mxUtils.bind(this, function()
 				{
 					try
 					{
-				        	if (currentTable != null)
-				        	{
-				        		graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex : 0));
-				        	}
+				       	if (currentTable != null)
+				       	{
+				       		graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex : 0));
+				       	}
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-insertcolumnafter', mxResources.get('insertColumnAfter'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
 						if (currentTable != null)
-				        	{
-								graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex + 1 : -1));
-				        	}
+				       	{
+							graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex + 1 : -1));
+				       	}
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-deletecolumn', mxResources.get('deleteColumn'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3120,11 +3242,11 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-insertrowbefore', mxResources.get('insertRowBefore'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3135,11 +3257,11 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-insertrowafter', mxResources.get('insertRowAfter'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3150,11 +3272,11 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-deleterow', mxResources.get('deleteRow'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3165,9 +3287,9 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel)];
+				}), tablePanel)];
 		this.styleButtons(btns);
 		btns[2].style.marginRight = '9px';
 		
@@ -3472,22 +3594,33 @@ TextFormatPanel.prototype.addFont = function(container)
 							node = graph.cellEditor.textarea.firstChild;
 						}
 						
-						function getRelativeLineHeight(fontSize, lineHeight, elt)
+						function getRelativeLineHeight(fontSize, css, elt)
 						{
-							if (elt.style.lineHeight.substring(elt.style.lineHeight.length - 1) == '%')
+							if (elt.style != null && css != null)
 							{
-								return parseInt(elt.style.lineHeight) / 100;
+								var lineHeight = css.lineHeight
+								
+								if (elt.style.lineHeight.substring(elt.style.lineHeight.length - 1) == '%')
+								{
+									return parseInt(elt.style.lineHeight) / 100;
+								}
+								else
+								{
+									return (lineHeight.substring(lineHeight.length - 2) == 'px') ?
+											parseFloat(lineHeight) / fontSize : parseInt(lineHeight);
+								}
 							}
 							else
 							{
-								return (lineHeight.substring(lineHeight.length - 2) == 'px') ?
-										parseFloat(lineHeight) / fontSize : parseInt(lineHeight);
+								return '';
 							}
 						};
 						
-						function getAbsoluteFontSize(fontSize)
+						function getAbsoluteFontSize(css)
 						{
-							if (fontSize.substring(fontSize.length - 2) == 'px')
+							var fontSize = (css != null) ? css.fontSize : null;
+								
+							if (fontSize != null && fontSize.substring(fontSize.length - 2) == 'px')
 							{
 								return parseFloat(fontSize);
 							}
@@ -3495,12 +3628,11 @@ TextFormatPanel.prototype.addFont = function(container)
 							{
 								return mxConstants.DEFAULT_FONTSIZE;
 							}
-						}
+						};
 						
-						//var realCss = mxUtils.getCurrentStyle(selectedElement);
 						var css = mxUtils.getCurrentStyle(node);
-						var fontSize = getAbsoluteFontSize(css.fontSize);
-						var lineHeight = getRelativeLineHeight(fontSize, css.lineHeight, node);
+						var fontSize = getAbsoluteFontSize(css);
+						var lineHeight = getRelativeLineHeight(fontSize, css, node);
 
 						// Finds common font size
 						var elts = node.getElementsByTagName('*');
@@ -3515,8 +3647,8 @@ TextFormatPanel.prototype.addFont = function(container)
 								if (selection.containsNode(elts[i], true))
 								{
 									temp = mxUtils.getCurrentStyle(elts[i]);
-									fontSize = Math.max(getAbsoluteFontSize(temp.fontSize), fontSize);
-									var lh = getRelativeLineHeight(fontSize, temp.lineHeight, elts[i]);
+									fontSize = Math.max(getAbsoluteFontSize(temp), fontSize);
+									var lh = getRelativeLineHeight(fontSize, temp, elts[i]);
 									
 									if (lh != lineHeight || isNaN(lh))
 									{
@@ -3526,17 +3658,61 @@ TextFormatPanel.prototype.addFont = function(container)
 							}
 						}
 						
+						function hasParentOrOnlyChild(name)
+						{
+							if (graph.getParentByName(node, name, graph.cellEditor.textarea) != null)
+							{
+								return true;
+							}
+							else
+							{
+								var child = node;
+								
+								while (child != null && child.childNodes.length == 1)
+								{
+									child = child.childNodes[0];
+									
+									if (child.nodeName == name)
+									{
+										return true;
+									}
+								}
+							}
+							
+							return false;
+						};
+						
+						function isEqualOrPrefixed(str, value)
+						{
+							if (str != null && value != null)
+							{
+								if (str == value)
+								{
+									return true;
+								}
+								else if (str.length > value.length + 1)
+								{
+									return str.substring(str.length - value.length - 1, str.length) == '-' + value;
+								}
+							}
+							
+							return false;
+						};
+						
 						if (css != null)
 						{
-							setSelected(fontStyleItems[0], css.fontWeight == 'bold' || graph.getParentByName(node, 'B', graph.cellEditor.textarea) != null);
-							setSelected(fontStyleItems[1], css.fontStyle == 'italic' || graph.getParentByName(node, 'I', graph.cellEditor.textarea) != null);
-							setSelected(fontStyleItems[2], graph.getParentByName(node, 'U', graph.cellEditor.textarea) != null);
-							setSelected(left, css.textAlign == 'left');
-							setSelected(center, css.textAlign == 'center');
-							setSelected(right, css.textAlign == 'right');
-							setSelected(full, css.textAlign == 'justify');
-							setSelected(sup, graph.getParentByName(node, 'SUP', graph.cellEditor.textarea) != null);
-							setSelected(sub, graph.getParentByName(node, 'SUB', graph.cellEditor.textarea) != null);
+							setSelected(fontStyleItems[0], css.fontWeight == 'bold' ||
+								css.fontWeight > 400 || hasParentOrOnlyChild('B') ||
+								hasParentOrOnlyChild('STRONG'));
+							setSelected(fontStyleItems[1], css.fontStyle == 'italic' ||
+								hasParentOrOnlyChild('I') || hasParentOrOnlyChild('EM'));
+							setSelected(fontStyleItems[2], hasParentOrOnlyChild('U'));
+							setSelected(left, isEqualOrPrefixed(css.textAlign, 'left'));
+							setSelected(center, isEqualOrPrefixed(css.textAlign, 'center'));
+							setSelected(right, isEqualOrPrefixed(css.textAlign, 'right'));
+							setSelected(full, isEqualOrPrefixed(css.textAlign, 'justify'));
+							setSelected(sup, hasParentOrOnlyChild('SUP'));
+							setSelected(sub, hasParentOrOnlyChild('SUB'));
 							
 							currentTable = graph.getParentByName(node, 'TABLE', graph.cellEditor.textarea);
 							tableRow = (currentTable == null) ? null : graph.getParentByName(node, 'TR', currentTable);
@@ -3647,7 +3823,12 @@ TextFormatPanel.prototype.addFont = function(container)
 			}
 		};
 		
-		mxEvent.addListener(graph.cellEditor.textarea, 'input', updateCssHandler)
+		if (mxClient.IS_FF || mxClient.IS_EDGE || mxClient.IS_IE || mxClient.IS_IE11)
+		{
+			mxEvent.addListener(graph.cellEditor.textarea, 'DOMSubtreeModified', updateCssHandler);
+		}
+		
+		mxEvent.addListener(graph.cellEditor.textarea, 'input', updateCssHandler);
 		mxEvent.addListener(graph.cellEditor.textarea, 'touchend', updateCssHandler);
 		mxEvent.addListener(graph.cellEditor.textarea, 'mouseup', updateCssHandler);
 		mxEvent.addListener(graph.cellEditor.textarea, 'keyup', updateCssHandler);
@@ -3687,6 +3868,12 @@ StyleFormatPanel.prototype.init = function()
 	var graph = editor.graph;
 	var ss = this.format.getSelectionState();
 	
+	if (ss.containsImage && ss.vertices.length == 1 && ss.style.shape == 'image' &&
+		ss.style.image != null && ss.style.image.substring(0, 19) == 'data:image/svg+xml;')
+	{
+		this.container.appendChild(this.addSvgStyles(this.createPanel()));
+	}
+	
 	if (!ss.containsImage || ss.style.shape == 'image')
 	{
 		this.container.appendChild(this.addFill(this.createPanel()));
@@ -3707,6 +3894,136 @@ StyleFormatPanel.prototype.init = function()
 	}
 	
 	this.container.appendChild(this.addStyleOps(opsPanel));
+};
+
+/**
+ * Use browser for parsing CSS.
+ */
+StyleFormatPanel.prototype.getCssRules = function(css)
+{
+	var doc = document.implementation.createHTMLDocument('');
+	var styleElement = document.createElement('style');
+	
+	mxUtils.setTextContent(styleElement, css);
+	doc.body.appendChild(styleElement);
+	
+	return styleElement.sheet.cssRules;
+};
+
+/**
+ * Adds the label menu items to the given menu and parent.
+ */
+StyleFormatPanel.prototype.addSvgStyles = function(container)
+{
+	var ui = this.editorUi;
+	var graph = ui.editor.graph;
+	var ss = this.format.getSelectionState();
+	container.style.paddingTop = '6px';
+	container.style.paddingBottom = '6px';
+	container.style.fontWeight = 'bold';
+	container.style.display = 'none';
+
+	try
+	{
+		var exp = ss.style.editableCssRules;
+		
+		if (exp != null)
+		{
+			var regex = new RegExp(exp);
+			
+			var data = ss.style.image.substring(ss.style.image.indexOf(',') + 1);
+			var xml = (window.atob) ? atob(data) : Base64.decode(data, true);
+			var svg = mxUtils.parseXml(xml);
+			
+			if (svg != null)
+			{
+				var styles = svg.getElementsByTagName('style');
+				
+				for (var i = 0; i < styles.length; i++)
+				{
+					var rules = this.getCssRules(mxUtils.getTextContent(styles[i]));
+					
+					for (var j = 0; j < rules.length; j++)
+					{
+						this.addSvgRule(container, rules[j], svg, styles[i], rules, j, regex);
+					}
+				}
+			}
+		}
+	}
+	catch (e)
+	{
+		// ignore
+	}
+	
+	return container;
+};
+
+/**
+ * Adds the label menu items to the given menu and parent.
+ */
+StyleFormatPanel.prototype.addSvgRule = function(container, rule, svg, styleElem, rules, ruleIndex, regex)
+{
+	var ui = this.editorUi;
+	var graph = ui.editor.graph;
+	
+	if (regex.test(rule.selectorText))
+	{
+		function rgb2hex(rgb)
+		{
+			 rgb = rgb.match(/^rgba?[\s+]?\([\s+]?(\d+)[\s+]?,[\s+]?(\d+)[\s+]?,[\s+]?(\d+)[\s+]?/i);
+			 
+			 return (rgb && rgb.length === 4) ? "#" +
+			  ("0" + parseInt(rgb[1],10).toString(16)).slice(-2) +
+			  ("0" + parseInt(rgb[2],10).toString(16)).slice(-2) +
+			  ("0" + parseInt(rgb[3],10).toString(16)).slice(-2) : '';
+		};
+		
+		var addStyleRule = mxUtils.bind(this, function(rule, key, label)
+		{
+			if (rule.style[key] != '')
+			{
+				var option = this.createColorOption(label + ' ' + rule.selectorText, function()
+				{
+					return rgb2hex(rule.style[key]);
+				}, function(color)
+				{
+					rules[ruleIndex].style[key] = color;
+					var cssTxt = '';
+					
+					for (var i = 0; i < rules.length; i++) 
+					{
+						cssTxt += rules[i].cssText + ' ';
+					}
+					
+					styleElem.textContent = cssTxt;
+					var xml = mxUtils.getXml(svg.documentElement);
+					
+					graph.setCellStyles(mxConstants.STYLE_IMAGE, 'data:image/svg+xml,' +
+						((window.btoa) ? btoa(xml) : Base64.encode(xml, true)),
+						graph.getSelectionCells());
+				}, '#ffffff',
+				{
+					install: function(apply)
+					{
+						// ignore
+					},
+					destroy: function()
+					{
+						// ignore
+					}
+				});
+			
+				container.appendChild(option);
+				
+				// Shows container if rules are added
+				container.style.display = '';
+			}
+		});
+		
+		addStyleRule(rule, 'fill', mxResources.get('fill'));
+		addStyleRule(rule, 'stroke', mxResources.get('line'));
+	}
 };
 
 /**
@@ -3795,8 +4112,9 @@ StyleFormatPanel.prototype.addFill = function(container)
 	});
 
 	var fillKey = (ss.style.shape == 'image') ? mxConstants.STYLE_IMAGE_BACKGROUND : mxConstants.STYLE_FILLCOLOR;
+	var label = (ss.style.shape == 'image') ? mxResources.get('background') : mxResources.get('fill');
 	
-	var fillPanel = this.createCellColorOption(mxResources.get('fill'), fillKey, '#ffffff');
+	var fillPanel = this.createCellColorOption(label, fillKey, '#ffffff');
 	fillPanel.style.fontWeight = 'bold';
 
 	var tmpColor = mxUtils.getValue(ss.style, fillKey, null);
@@ -3956,8 +4274,9 @@ StyleFormatPanel.prototype.addStroke = function(container)
 	});
 
 	var strokeKey = (ss.style.shape == 'image') ? mxConstants.STYLE_IMAGE_BORDER : mxConstants.STYLE_STROKECOLOR;
+	var label = (ss.style.shape == 'image') ? mxResources.get('border') : mxResources.get('line');
 	
-	var lineColor = this.createCellColorOption(mxResources.get('line'), strokeKey, '#000000');
+	var lineColor = this.createCellColorOption(label, strokeKey, '#000000');
 	lineColor.appendChild(styleSelect);
 	colorPanel.appendChild(lineColor);
 	
@@ -4847,36 +5166,36 @@ DiagramFormatPanel.prototype.addView = function(div)
 	
 	// Grid
 	this.addGridOption(div);
-
+	
+	// Page View
+	if (DiagramFormatPanel.showPageView)
+	{
+		div.appendChild(this.createOption(mxResources.get('pageView'), function()
+		{
+			return graph.pageVisible;
+		}, function(checked)
+		{
+			ui.actions.get('pageView').funct();
+		},
+		{
+			install: function(apply)
+			{
+				this.listener = function()
+				{
+					apply(graph.pageVisible);
+				};
+				
+				ui.addListener('pageViewChanged', this.listener);
+			},
+			destroy: function()
+			{
+				ui.removeListener(this.listener);
+			}
+		}));
+	}
+	
 	if (graph.isEnabled())
 	{
-		// Page View
-		if (DiagramFormatPanel.showPageView)
-		{
-			div.appendChild(this.createOption(mxResources.get('pageView'), function()
-			{
-				return graph.pageVisible;
-			}, function(checked)
-			{
-				ui.actions.get('pageView').funct();
-			},
-			{
-				install: function(apply)
-				{
-					this.listener = function()
-					{
-						apply(graph.pageVisible);
-					};
-					
-					ui.addListener('pageViewChanged', this.listener);
-				},
-				destroy: function()
-				{
-					ui.removeListener(this.listener);
-				}
-			}));
-		}
-		
 		// Background
 		var bg = this.createColorOption(mxResources.get('background'), function()
 		{
@@ -5085,7 +5404,6 @@ DiagramFormatPanel.prototype.addGridOption = function(container)
 			if (color == mxConstants.NONE)
 			{
 				graph.setGridEnabled(false);
-				ui.fireEvent(new mxEventObject('gridEnabledChanged'));
 			}
 			else
 			{
@@ -5095,6 +5413,7 @@ DiagramFormatPanel.prototype.addGridOption = function(container)
 
 			input.style.display = (graph.isGridEnabled()) ? '' : 'none';
 			stepper.style.display = input.style.display;
+			ui.fireEvent(new mxEventObject('gridEnabledChanged'));
 		}, '#e0e0e0',
 		{
 			install: function(apply)

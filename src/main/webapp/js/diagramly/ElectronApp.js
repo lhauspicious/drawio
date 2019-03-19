@@ -80,36 +80,48 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		menusInit.apply(this, arguments);
 
 		var editorUi = this.editorUi;
+
+		editorUi.actions.put('useOffline', new Action(mxResources.get('useOffline') + '...', function()
+		{
+			editorUi.openLink('https://www.draw.io/')
+		}));
 		
 		// Replaces file menu to replace openFrom menu with open and rename downloadAs to export
 		this.put('file', new Menu(mxUtils.bind(this, function(menu, parent)
 		{
-			this.addMenuItems(menu, ['new', 'open', '-', 'save', 'saveAs', '-', 'import'], parent);
+			this.addMenuItems(menu, ['new', 'open', '-', 'synchronize', '-', 'save', 'saveAs', '-', 'import'], parent);
 			this.addSubmenu('exportAs', menu, parent);
 			menu.addSeparator(parent);
 			this.addSubmenu('embed', menu, parent);
-			this.addSubmenu('publish', menu, parent);
 			menu.addSeparator(parent);
 			this.addMenuItems(menu, ['newLibrary', 'openLibrary', '-', 'pageSetup',
 				'print', '-', 'close'], parent);
 			// LATER: Find API for application.quit
 		})));
+	};
+	
+	var graphCreateLinkForHint = Graph.prototype.createLinkForHint;
+	
+	Graph.prototype.createLinkForHint = function(href, label)
+	{
+		var a = graphCreateLinkForHint.call(this, href, label);
 		
-		this.put('extras', new Menu(mxUtils.bind(this, function(menu, parent)
+		if (href != null && !this.isCustomLink(href))
 		{
-			this.addSubmenu('theme', menu, parent);
-			menu.addSeparator(parent);
-			this.addMenuItems(menu, ['copyConnect', 'collapseExpand', '-'], parent);
-
-			if (typeof(MathJax) !== 'undefined')
+			// KNOWN: Event with gesture handler mouseUp the middle click opens a framed window
+			mxEvent.addListener(a, 'click', mxUtils.bind(this, function(evt)
 			{
-				var item = this.addMenuItem(menu, 'mathematicalTypesetting', parent);
-				this.addLinkToItem(item, 'https://desk.draw.io/support/solutions/articles/16000032875');
-			}
-			
-			this.addMenuItems(menu, ['autosave', '-', 'createShape', 'editDiagram', '-',
-				'plugins', 'tags', '-', 'online'], parent);
-		})));
+				this.openLink(a.getAttribute('href'), a.getAttribute('target'));
+				mxEvent.consume(evt);
+			}));
+		}
+		
+		return a;
+	};
+	
+	Graph.prototype.openLink = function(url, target)
+	{
+		require('electron').shell.openExternal(url);
 	};
 	
 	// Initializes the user interface
@@ -121,11 +133,16 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		var editorUi = this;
 		var graph = this.editor.graph;
 		
-		global.__emt_isModified = e => {
+		global.__emt_isModified =
+		e => {
 			if (this.getCurrentFile())
+			{
 				return this.getCurrentFile().isModified()
+			}
+
 			return false
 		}
+		
 		// global.__emt_getCurrentFile = e => {
 		// 	return this.getCurrentFile()
 		// }
@@ -154,31 +171,36 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			           
 		        if (paths !== undefined && paths[0] != null)
 		        {
-			        	var path = paths[0];
-			        	var asImage = /\.png$/i.test(path) || /\.gif$/i.test(path) || /\.jpe?g$/i.test(path);
-			        	var encoding = (asImage || /\.vsdx$/i.test(path) || /\.vssx$/i.test(path)) ?
-			        		'base64' : 'utf-8';
+		        	var path = paths[0];
+		        	var asImage = /\.png$/i.test(path) || /\.gif$/i.test(path) || /\.jpe?g$/i.test(path);
+		        	var encoding = (asImage || /\.vsdx$/i.test(path) || /\.vssx$/i.test(path)) ?
+		        		'base64' : 'utf-8';
 
 					if (editorUi.spinner.spin(document.body, mxResources.get('loading')))
 					{
 						var fs = require('fs');
 
 						fs.readFile(path, encoding, mxUtils.bind(this, function (e, data)
+				        {
+			        		if (e)
+			        		{
+			        			editorUi.spinner.stop();
+			        			editorUi.handleError(e);
+			        		}
+			        		else
 				        	{
-				        		if (e)
-				        		{
-				        			editorUi.spinner.stop();
-				        			editorUi.handleError(e);
-				        		}
-				        		else
-				        		{
 								try
 								{
-									if (data.substring(0, 26) == '{"state":"{\\"Properties\\":')
+									if (editorUi.isLucidChartData(data))
 									{
-										editorUi.importLucidChart(data, 0, 0, null, function()
+										editorUi.convertLucidChart(data, function(xml)
 										{
 											editorUi.spinner.stop();
+											graph.setSelectionCells(editorUi.importXml(xml));
+										}, function(e)
+										{
+											editorUi.spinner.stop();
+											editorUi.handleError(e);
 										});
 									}
 									else if  (/(\.vsdx)($|\?)/i.test(path))
@@ -186,7 +208,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 										editorUi.importVisio(editorUi.base64ToBlob(data, 'application/octet-stream'), function(xml)
 										{
 											editorUi.spinner.stop();
-											editorUi.editor.graph.setSelectionCells(editorUi.insertTextAt(xml, 0, 0, true));
+											graph.setSelectionCells(editorUi.importXml(xml));
 										});
 									}
 									else if (!editorUi.isOffline() && new XMLHttpRequest().upload && editorUi.isRemoteFileFormat(data, path))
@@ -200,7 +222,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 												
 												if (xhr.status >= 200 && xhr.status <= 299)
 												{
-													editorUi.editor.graph.setSelectionCells(editorUi.insertTextAt(xhr.responseText, 0, 0, true));
+													graph.setSelectionCells(editorUi.importXml(xhr.responseText));
 												}
 											}
 										}), path);
@@ -218,40 +240,40 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 											}
 										}
 										else if (/\.svg$/i.test(path))
-							    			{
-												// LATER: Use importXml without throwing exception if no data
-							    				// Checks if SVG contains content attribute
-						    					var root = mxUtils.parseXml(data);
-					    						var svgs = root.getElementsByTagName('svg');
-					    						
-					    						if (svgs.length > 0)
+						    			{
+											// LATER: Use importXml without throwing exception if no data
+						    				// Checks if SVG contains content attribute
+					    					var root = mxUtils.parseXml(data);
+				    						var svgs = root.getElementsByTagName('svg');
+				    						
+				    						if (svgs.length > 0)
+					    					{
+				    							var svgRoot = svgs[0];
+						    					var cont = svgRoot.getAttribute('content');
+		
+						    					if (cont != null && cont.charAt(0) != '<' && cont.charAt(0) != '%')
 						    					{
-					    							var svgRoot = svgs[0];
-							    					var cont = svgRoot.getAttribute('content');
-			
-							    					if (cont != null && cont.charAt(0) != '<' && cont.charAt(0) != '%')
-							    					{
-							    						cont = unescape((window.atob) ? atob(cont) : Base64.decode(cont, true));
-							    					}
-							    					
-							    					if (cont != null && cont.charAt(0) == '%')
-							    					{
-							    						cont = decodeURIComponent(cont);
-							    					}
-			
-							    					if (cont != null && (cont.substring(0, 8) === '<mxfile ' ||
-							    						cont.substring(0, 14) === '<mxGraphModel '))
-							    					{
-							    						asImage = false;
-							    						data = cont;
-							    					}
-							    					else
-							    					{
-							    						asImage = true;
-							    						data = btoa(data);
-							    					}
+						    						cont = unescape((window.atob) ? atob(cont) : Base64.decode(cont, true));
 						    					}
-							    			}
+						    					
+						    					if (cont != null && cont.charAt(0) == '%')
+						    					{
+						    						cont = decodeURIComponent(cont);
+						    					}
+		
+						    					if (cont != null && (cont.substring(0, 8) === '<mxfile ' ||
+						    						cont.substring(0, 14) === '<mxGraphModel '))
+						    					{
+						    						asImage = false;
+						    						data = cont;
+						    					}
+						    					else
+						    					{
+						    						asImage = true;
+						    						data = btoa(data);
+						    					}
+					    					}
+						    			}
 										
 										if (asImage)
 										{
@@ -298,8 +320,8 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 									editorUi.spinner.stop();
 									editorUi.handleError(e);
 								}
-				        		}
-				        	}));
+			        		}
+			        	}));
 					}
 		        }
 			}
@@ -314,10 +336,10 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			{
 				oldNew();
 			}
-			else {
+			else
+			{
 				const ipc = require('electron').ipcRenderer
 				ipc.sendSync('winman', {action: 'newfile', opt: {width: 1600}})
-
 			}
 		}), null, null, Editor.ctrlKey + '+N');
 		
@@ -326,26 +348,6 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		// Adds shortcut keys for file operations
 		editorUi.keyHandler.bindAction(78, true, 'new'); // Ctrl+N
 		editorUi.keyHandler.bindAction(79, true, 'open'); // Ctrl+O
-		
-		editorUi.actions.addAction('keyboardShortcuts...', function()
-		{
-			const electron = require('electron');
-			const remote = electron.remote;
-			const BrowserWindow = remote.BrowserWindow;
-			keyboardWindow = new BrowserWindow({width: 1200, height: 1000});
-
-			// and load the index.html of the app.
-			keyboardWindow.loadURL(`file://${__dirname}/shortcuts.svg`);
-
-			// Emitted when the window is closed.
-			keyboardWindow.on('closed', function()
-			{
-			    // Dereference the window object, usually you would store windows
-			    // in an array if your app supports multi windows, this is the time
-			    // when you should delete the corresponding element.
-				keyboardWindow = null;
-			});
-		});
 	}
 	
 	var appLoad = App.prototype.load;
@@ -370,10 +372,11 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		{
 			var path = paths[0];
 			
-			var success = mxUtils.bind(this, function(fileEntry, data)
+			var success = mxUtils.bind(this, function(fileEntry, data, stat)
 			{
 				var file = new LocalFile(this, data, '');
 				file.fileObject = fileEntry;
+				file.stat = stat;
 				this.fileLoaded(file);
 			});
 			
@@ -417,10 +420,11 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 	{
 		var doPickFile = mxUtils.bind(this, function()
 		{
-			this.chooseFileEntry(mxUtils.bind(this, function(fileEntry, data)
+			this.chooseFileEntry(mxUtils.bind(this, function(fileEntry, data, stat)
 			{
 				var file = new LocalFile(this, data, '');
 				file.fileObject = fileEntry;
+				file.stat = stat;
 				this.fileLoaded(file);
 			}));
 		});
@@ -445,7 +449,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 	 */
 	App.prototype.pickLibrary = function(mode)
 	{
-		this.chooseFileEntry(mxUtils.bind(this, function(fileEntry, data)
+		this.chooseFileEntry(mxUtils.bind(this, function(fileEntry, data, stat)
 		{
 			try
 			{
@@ -471,7 +475,14 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 	           
         if (paths !== undefined && paths[0] != null)
         {
-			this.readGraphFile(fn, this.handleError.bind(this), paths[0]);
+			this.readGraphFile(fn, mxUtils.bind(this, function(err)
+			{
+				this.handleError(err);
+			}), paths[0]);
+        }
+        else
+        {
+        	this.spinner.stop();
         }
 	};
 
@@ -494,14 +505,25 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 				{
 					// Detecting png by extension. Would need https://github.com/mscdex/mmmagic
 					// to do it by inspection
-					data = this.extractGraphModelFromPng(data, true);
+					data = this.extractGraphModelFromPng('data:image/png;base64,' + data);
 				}
 
 				var fileEntry = new Object();
 				fileEntry.path = path;
 				fileEntry.name = path.replace(/^.*[\\\/]/, '');
 				fileEntry.type = encoding;
-				fn(fileEntry, data);
+
+				fs.stat(path, function(err, stat)
+				{
+					if (err)
+					{
+						fnErr(err);
+					}
+					else
+					{
+						fn(fileEntry, data, stat);
+					}
+				});
 			}
 		}));
 	};
@@ -516,14 +538,116 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 
 	mxUtils.extend(LocalFile, LocalFileCtor);
 
+	LocalFile.prototype.getLatestVersion = function(success, error)
+	{
+		if (this.fileObject == null)
+		{
+			if (error != null)
+			{
+				error({message: mxResources.get('fileNotFound')});
+			}
+		}
+		else
+		{
+			this.ui.readGraphFile(mxUtils.bind(this, function(fileEntry, data, stat)
+			{
+				var file = new LocalFile(this, data, '');
+				file.stat = stat;
+				success(file);
+			}), error, this.fileObject.path);
+		}
+	};
+	
+	// Call save as for copy
+	LocalFile.prototype.copyFile = function(success, error)
+	{
+		this.saveAs(this.ui.getCopyFilename(this), success, error);
+	};
+	
+	/**
+	 * Adds all listeners.
+	 */
+	LocalFile.prototype.getDescriptor = function()
+	{
+		return this.stat;
+	};
+
+	/**
+	* Updates the descriptor of this file with the one from the given file.
+	*/
+	LocalFile.prototype.setDescriptor = function(stat)
+	{
+		this.stat = stat;
+	};
+	
+	LocalFile.prototype.reloadFile = function(success)
+	{
+		if (this.fileObject == null)
+		{
+			this.ui.handleError({message: mxResources.get('fileNotFound')});
+		}
+		else
+		{
+			this.ui.spinner.stop();
+			
+			var fn = mxUtils.bind(this, function()
+			{
+				this.setModified(false);
+				var page = this.ui.currentPage;
+				var viewState = this.ui.editor.graph.getViewState();
+				var selection = this.ui.editor.graph.getSelectionCells();
+				
+				if (this.ui.spinner.spin(document.body, mxResources.get('loading')))
+				{
+					this.ui.readGraphFile(mxUtils.bind(this, function(fileEntry, data, stat)
+					{
+						this.ui.spinner.stop();
+						
+						var file = new LocalFile(this.ui, data, '');
+						file.fileObject = fileEntry;
+						file.stat = stat;
+						
+						this.ui.fileLoaded(file);
+						this.ui.restoreViewState(page, viewState, selection);
+		
+						if (this.backupPatch != null)
+						{
+							this.patch([this.backupPatch]);
+						}
+						
+						if (success != null)
+						{
+							success();
+						}
+					}), mxUtils.bind(this, function(err)
+					{
+						this.handleFileError(err);
+					}), this.fileObject.path);
+				}
+			});
+	
+			if (this.isModified() && this.backupPatch == null)
+			{
+				this.ui.confirm(mxResources.get('allChangesLost'), mxUtils.bind(this, function()
+				{
+					this.handleFileSuccess(DrawioFile.SYNC == 'manual');
+				}), fn, mxResources.get('cancel'), mxResources.get('discardChanges'));
+			}
+			else
+			{
+				fn();
+			}
+		}
+	};
+
 	LocalFile.prototype.isAutosave = function()
 	{
-		return this.ui.editor.autosave && this.fileObject != null;
+		return this.fileObject != null && DrawioFile.prototype.isAutosave.apply(this, arguments);
 	};
 	
 	LocalFile.prototype.isAutosaveOptional = function()
 	{
-		return true;
+		return this.fileObject != null;
 	};
 	
 	LocalLibrary.prototype.isAutosave = function()
@@ -544,104 +668,11 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 	// Restores default implementation of open with autosave
 	LocalFile.prototype.open = DrawioFile.prototype.open;
 
-	LocalFile.prototype.save = function(revision, success, error)
+	LocalFile.prototype.save = function(revision, success, error, unloading, overwrite)
 	{
 		DrawioFile.prototype.save.apply(this, arguments);
 		
-		this.saveFile(revision, success, error);
-	};
-	
-	LocalFile.prototype.saveFile = function(revision, success, error)
-	{
-		var fn = mxUtils.bind(this, function()
-		{
-			var doSave = mxUtils.bind(this, function(data, enc)
-			{
-				if (!this.savingFile)
-				{
-					this.savingFile = true;
-					
-					// Makes sure no changes get lost while the file is saved
-					var prevModified = this.isModified;
-					var modified = this.isModified();
-					this.setModified(false);
-					var fs = require('fs');
-					
-					fs.writeFile(this.fileObject.path, data, enc || this.fileObject.encoding, mxUtils.bind(this, function (e)
-				    {
-		        		if (e)
-		        		{
-		        			this.savingFile = false;
-							this.isModified = prevModified;
-							this.setModified(modified || this.isModified());
-							
-							if (error != null)
-							{
-		        				error();
-							}
-		        		}
-		        		else
-		        		{
-							this.savingFile = false;
-							this.isModified = prevModified;
-							this.contentChanged();
-							this.lastData = data;
-							
-							if (success != null)
-							{
-								success();
-							}
-		        		}
-		        	}));
-				}
-				else
-				{
-					// TODO, already saving. Need a better error
-					if (error != null)
-					{
-        				error();
-					}
-				}
-			});
-
-			if (!/(\.png)$/i.test(this.fileObject.name))
-			{
-				doSave(this.getData());
-			}
-			else
-			{
-				this.ui.getEmbeddedPng(function(data)
-				{
-					doSave(atob(data), 'binary');
-				}, error);
-			}
-		});
-		
-		if (this.fileObject == null)
-		{
-			const electron = require('electron');
-			var remote = electron.remote;
-			var dialog = remote.dialog;
-
-			var path = dialog.showSaveDialog({defaultPath: this.title});
-
-	        if (path != null)
-	        {
-				this.fileObject = new Object();
-				this.fileObject.path = path;
-				this.fileObject.name = path.replace(/^.*[\\\/]/, '');
-				this.fileObject.type = 'utf-8';
-				fn();
-			}
-	        else if (error != null)
-			{
-				error();
-			}
-		}
-		else
-		{
-			fn();
-		}
+		this.saveFile(revision, success, error, unloading, overwrite);
 	};
 
 	LocalLibrary.prototype.save = function(revision, success, error)
@@ -649,6 +680,145 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		LocalFile.prototype.saveFile.apply(this, arguments);
 	};
 	
+	LocalFile.prototype.isConflict = function(stat)
+	{
+		return stat != null && this.stat != null && stat.mtimeMs != this.stat.mtimeMs;
+	};
+	
+	LocalFile.prototype.saveFile = function(revision, success, error, unloading, overwrite)
+	{
+		if (!this.savingFile)
+		{
+			var fn = mxUtils.bind(this, function()
+			{
+				var doSave = mxUtils.bind(this, function(data, enc)
+				{
+					var savedData = this.data;
+					
+					// Makes sure no changes get lost while the file is saved
+					var prevModified = this.isModified;
+					var modified = this.isModified();
+					this.setModified(false);
+					this.savingFile = true;
+					var fs = require('fs');
+					
+					var errorWrapper = mxUtils.bind(this, function()
+					{
+						this.savingFile = false;
+						this.isModified = prevModified;
+						this.setModified(modified || this.isModified());
+						
+						if (error != null)
+						{
+	        				error();
+						}
+					});
+					
+					var writeFile = mxUtils.bind(this, function()
+					{
+						fs.writeFile(this.fileObject.path, data, enc || this.fileObject.encoding,
+							mxUtils.bind(this, function (e)
+					    {
+			        		if (e)
+			        		{
+			        			errorWrapper();
+			        		}
+			        		else
+			        		{
+								fs.stat(this.fileObject.path, mxUtils.bind(this, function(e2, stat2)
+								{
+									if (e2)
+					        		{
+					        			errorWrapper();
+					        		}
+									else
+									{
+										this.savingFile = false;
+										this.isModified = prevModified;
+										var lastDesc = this.stat;
+										this.stat = stat2;
+										
+										this.fileSaved(savedData, lastDesc, mxUtils.bind(this, function()
+										{
+											this.contentChanged();
+											
+											if (success != null)
+											{
+												success();
+											}
+										}), error);
+									}
+								}));
+			        		}
+			        	}));
+					});
+					
+					if (overwrite)
+					{
+						writeFile();
+					}
+					else
+					{
+						fs.stat(this.fileObject.path, mxUtils.bind(this, function(err, stat)
+						{
+							if (this.isConflict(stat))
+							{
+								this.inConflictState = true;
+								errorWrapper();
+							}
+							else if (err != null && err.code !== 'ENOENT')
+							{
+								errorWrapper();
+							}
+							else
+							{
+								writeFile();
+							}
+						}));
+					}
+				});
+	
+				if (!/(\.png)$/i.test(this.fileObject.name))
+				{
+					doSave(this.getData());
+				}
+				else
+				{
+					this.ui.getEmbeddedPng(function(data)
+					{
+						doSave(atob(data), 'binary');
+					}, error);
+				}
+			});
+			
+			if (this.fileObject == null)
+			{
+				const electron = require('electron');
+				var remote = electron.remote;
+				var dialog = remote.dialog;
+	
+				var path = dialog.showSaveDialog({defaultPath: this.title});
+	
+		        if (path != null)
+		        {
+					this.fileObject = new Object();
+					this.fileObject.path = path;
+					this.fileObject.name = path.replace(/^.*[\\\/]/, '');
+					this.fileObject.type = 'utf-8';
+					fn();
+				}
+		        else
+		        {
+	            	this.ui.spinner.stop();
+		        }
+			}
+			else
+			{
+				fn();
+			}
+		}
+	};
+
 	LocalFile.prototype.saveAs = function(title, success, error)
 	{
 		const electron = require('electron');
@@ -658,9 +828,9 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		
 		// Adds default extension
 		if (filename.length > 0 && (!/(\.xml)$/i.test(filename) && !/(\.html)$/i.test(filename) &&
-			!/(\.svg)$/i.test(filename) && !/(\.png)$/i.test(filename)))
+			!/(\.svg)$/i.test(filename) && !/(\.png)$/i.test(filename) && !/(\.drawio)$/i.test(filename)))
 		{
-			filename += '.xml';
+			filename += '.drawio';
 		}
 		
 		var path = dialog.showSaveDialog({defaultPath: filename});
@@ -671,14 +841,11 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			this.fileObject.path = path;
 			this.fileObject.name = path.replace(/^.*[\\\/]/, '');
 			this.fileObject.type = 'utf-8';
-			this.save(false, success, error);
-		}
-        else if (error != null)
-		{
-			error();
+			
+			this.save(false, success, error, null, true);
 		}
 	};
-
+	
 	App.prototype.saveFile = function(forceDialog)
 	{
 		var file = this.getCurrentFile();
@@ -687,26 +854,22 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		{
 			if (!forceDialog && file.getTitle() != null)
 			{
-				file.save(true, mxUtils.bind(this, function(resp)
+				file.save(true, mxUtils.bind(this, function()
 				{
-					this.spinner.stop();
-					this.editor.setStatus(mxUtils.htmlEntities(mxResources.get('allChangesSaved')));
-				}), mxUtils.bind(this, function(resp)
+					file.handleFileSuccess(true);
+				}), mxUtils.bind(this, function(err)
 				{
-					this.editor.setStatus('');
-					this.handleError(resp, mxResources.get('errorSavingFile'));
+					file.handleFileError(err, true);
 				}));
 			}
 			else
 			{
-				file.saveAs(null, mxUtils.bind(this, function(resp)
+				file.saveAs(null, mxUtils.bind(this, function()
 				{
-					this.spinner.stop();
-					this.editor.setStatus(mxUtils.htmlEntities(mxResources.get('allChangesSaved')));
-				}), mxUtils.bind(this, function(resp)
+					file.handleFileSuccess(true);
+				}), mxUtils.bind(this, function(err)
 				{
-					this.editor.setStatus('');
-					this.handleError(resp, mxResources.get('errorSavingFile'));
+					file.handleFileError(err, true);
 				}));
 			}
 		}
@@ -798,6 +961,20 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		}
 	};
 	
+	
+	/**
+	 * Updates action states depending on the selection.
+	 */
+	var editorUiUpdateActionStates = EditorUi.prototype.updateActionStates;
+	EditorUi.prototype.updateActionStates = function()
+	{
+		editorUiUpdateActionStates.apply(this, arguments);
+
+		var file = this.getCurrentFile();
+		var syncEnabled = file != null && file.fileObject != null;
+		this.actions.get('synchronize').setEnabled(syncEnabled);
+	};
+	
 	EditorUi.prototype.saveLocalFile = function(data, filename, mimeType, base64Encoded, format, allowBrowser)
 	{
 		this.saveData(filename, format, data, mimeType, base64Encoded);
@@ -860,7 +1037,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 					{
 						this.handleError({message: mxResources.get('errorSavingFile')});
 					}
-	        		}));
+	        	}));
 			}
 		}), 0);
 	};

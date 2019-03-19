@@ -21,7 +21,8 @@ function createWindow (opt = {})
 		width: 1600,
 		height: 1200,
 		nodeIntegration: false,
-		'web-security': false,
+		webViewTag: false,
+		'web-security': true,
 		allowRunningInsecureContent: __DEV__,
 		webPreferences: {
 			// preload: path.resolve('./preload.js'),
@@ -45,7 +46,6 @@ function createWindow (opt = {})
 			'od': 0,
 			'gh': 0,
 			'tr': 0,
-			'analytics': 0,
 			'picker': 0,
 			'mode': 'device',
 			'browser': 0,
@@ -71,7 +71,7 @@ function createWindow (opt = {})
 
 		if (contents != null)
 		{
-			contents.executeJavaScript('global.__emt_isModified()', true,
+			contents.executeJavaScript('if(typeof global.__emt_isModified === \'function\'){global.__emt_isModified()}', true,
 				isModified =>
 				{
 					console.log('__emt_isModified', isModified)
@@ -112,26 +112,27 @@ function createWindow (opt = {})
 	mainWindow.webContents.on('did-fail-load', function(err)
     {
         let ourl = url.format(
+		{
+			pathname: `${__dirname}/index.html`,
+			protocol: 'file:',
+			query:
 			{
-				pathname: `${__dirname}/index.html`,
-				protocol: 'file:',
-				query:
-				{
-					'dev': __DEV__ ? 1 : 0,
-					'drawdev': __DEV__ ? 1 : 0,
-					'test': __DEV__ ? 1 : 0,
-					'db': 0,
-					'gapi': 0,
-					'od': 0,
-					'gh': 0,
-					'tr': 0,
-					'analytics': 0,
-					'picker': 0,
-					'mode': 'device',
-					'browser': 0
-				},
-				slashes: true,
-			})
+				'dev': __DEV__ ? 1 : 0,
+				'drawdev': __DEV__ ? 1 : 0,
+				'test': __DEV__ ? 1 : 0,
+				'db': 0,
+				'gapi': 0,
+				'od': 0,
+				'gh': 0,
+				'tr': 0,
+				'analytics': 0,
+				'picker': 0,
+				'mode': 'device',
+				'browser': 0,
+				'export': 'https://exp.draw.io/ImageExport4/export'
+			},
+			slashes: true,
+		})
 		
 		mainWindow.loadURL(ourl)
     })
@@ -182,7 +183,11 @@ app.on('ready', e =>
     
     win.webContents.on('did-finish-load', function()
     {
-        win.webContents.send('args-obj', program)
+        win.webContents.send('args-obj', program);
+        
+        win.webContents.setZoomFactor(1);
+        win.webContents.setVisualZoomLevelLimits(1, 1);
+        win.webContents.setLayoutZoomLevelLimits(0, 0);
     });
 	
 	let template = [{

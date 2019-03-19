@@ -730,6 +730,14 @@ mxVsdxCanvas2D.prototype.text = function(x, y, w, h, str, align, valign, wrap, f
 			str = mxUtils.getOuterHtml(str);
 		}
 
+		//This is the case with edges
+		if (w == 0 && h == 0)
+		{
+			var strSize = mxUtils.getSizeForString(str, that.cellState.style["fontSize"], that.cellState.style["fontFamily"]);
+			w = strSize.width * 1.2;
+			h = strSize.height * 1.2;
+		}
+		
 		//TODO support HTML text formatting and remaining attributes
 		if (format == 'html')
     	{
@@ -866,14 +874,15 @@ mxVsdxCanvas2D.prototype.text = function(x, y, w, h, str, align, valign, wrap, f
 			{
 				if (ch[i].nodeType == 3) 
 				{ //#text
+					var fontStyle = that.cellState.style["fontStyle"];
 					var styleMap = {
 						fontColor: pStyle['fontColor'] || that.cellState.style["fontColor"],
 						fontSize: pStyle['fontSize'] || that.cellState.style["fontSize"],
 						fontFamily: pStyle['fontFamily'] || that.cellState.style["fontFamily"],
 						align: pStyle['align'] || that.cellState.style["align"],
-						bold: pStyle['bold'],
-						italic: pStyle['italic'],
-						underline: pStyle['underline']
+						bold: pStyle['bold'] || (fontStyle & 1),
+						italic: pStyle['italic'] || (fontStyle & 2),
+						underline: pStyle['underline'] || (fontStyle & 4)
 					};
 					createTextRow(styleMap, charSect, pSect, text, ch[i].textContent);
 				} 
@@ -942,38 +951,87 @@ mxVsdxCanvas2D.prototype.text = function(x, y, w, h, str, align, valign, wrap, f
 			};
 			createTextRow(styleMap, charSect, pSect, text, str);
 		}
-		
-		var wShift = 0;
-		var hShift = 0;
 
-		switch(align) 
-		{
-			case "right": wShift = calcW/2; break;
-			case "center": wShift = 0; break;
-			case "left": wShift = -calcW/2; break;
-		}
-		
-		switch(valign) 
-		{
-			case "top": hShift = calcH/2; break;
-			case "middle": hShift = 0; break;
-			case "bottom": hShift = -calcH/2; break;
-		}
+		var wShift = 0, hShift = 0;
 
 		h = Math.max(h, calcH); 
 		w = Math.max(w, calcW);
-			
+		var hw = w/2, hh = h/2;
+		var pRotDegrees = parseInt(mxUtils.getValue(this.cellState.style, 'rotation', '0'));
+		var pRot = pRotDegrees * Math.PI / 180;
+
+		//TODO Fix align and valign for rotated cases. Currently, all rotated shapes labels are centered
+		switch(align) 
+		{
+			case "right": 
+				if (pRotDegrees != 0) 
+				{
+					x -= hw * Math.cos(pRot);
+					y -= hw * Math.sin(pRot);
+				}
+				else 
+				{
+					wShift = calcW/2;
+				}
+			break;
+			case "center":
+				//nothing
+			break;
+			case "left":
+				if (pRotDegrees != 0) 
+				{
+					x += hw * Math.cos(pRot);
+					y += hw * Math.sin(pRot);
+				}
+				else
+				{
+					wShift = -calcW/2;
+				}
+			break;
+		}
+
+		switch(valign) 
+		{
+			case "top": 
+				if (pRotDegrees != 0) 
+				{
+					x += hh * Math.sin(pRot);
+					y += hh * Math.cos(pRot);
+				}
+				else
+				{
+					hShift = calcH/2;
+				}
+			break;
+			case "middle":
+				//nothing
+			break;
+			case "bottom": 
+				if (pRotDegrees != 0) 
+				{
+					x -= hh * Math.sin(pRot);
+					y -= hh * Math.cos(pRot);
+				}
+				else
+				{
+					hShift = -calcH/2;
+				}
+			break;
+		}
+
 		x = (x - geo.x + s.dx) * s.scale;
 		y = (geo.height - y + geo.y - s.dy) * s.scale;
 
-		var hw = w/2, hh = h/2;
 		this.shape.appendChild(this.createCellElemScaled("TxtPinX", x));
 		this.shape.appendChild(this.createCellElemScaled("TxtPinY", y));
 		this.shape.appendChild(this.createCellElemScaled("TxtWidth", w));
 		this.shape.appendChild(this.createCellElemScaled("TxtHeight", h));
-		this.shape.appendChild(this.createCellElemScaled("TxtLocPinX", hw + wShift));
-		this.shape.appendChild(this.createCellElemScaled("TxtLocPinY", hh + hShift));
+        this.shape.appendChild(this.createCellElemScaled("TxtLocPinX", hw + wShift));
+        this.shape.appendChild(this.createCellElemScaled("TxtLocPinY", hh + hShift));
 
+		
+		rotation -= pRotDegrees;
+		
 		if (rotation != 0)
 			this.shape.appendChild(this.createCellElem("TxtAngle", (360 - rotation) * Math.PI / 180));
 

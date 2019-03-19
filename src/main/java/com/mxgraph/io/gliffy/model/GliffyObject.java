@@ -8,7 +8,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import com.mxgraph.io.gliffy.importer.PostDeserializer.PostDeserializable;
 import com.mxgraph.model.mxCell;
@@ -26,6 +25,8 @@ public class GliffyObject implements PostDeserializable
 	private static Set<String> GROUP_SHAPES = new HashSet<String>();
 
 	private static Set<String> MINDMAP_SHAPES = new HashSet<>();
+	
+	private static Set<String> FILLCLR_IS_STROKECLR_SHAPES = new HashSet<>();
 	
 	private static Map<String, double[]> SHAPES_COORD_FIX = new HashMap<>();
 
@@ -71,7 +72,6 @@ public class GliffyObject implements PostDeserializable
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.use_case");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.actor");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.use_case");
-		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.self_message");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.message");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.activation");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.dependency");
@@ -120,9 +120,32 @@ public class GliffyObject implements PostDeserializable
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.home");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.gliffy");
 		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.form");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.shopping_cart");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.text");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.video");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.upload");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.slideshow");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.sitemap");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.settings");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.search");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.script");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.print");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.pricing");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.photo");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.map");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.login");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.game");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.gallery");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.download");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.document");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.chat");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.calendar");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.audio");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.profile");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.error");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.success");
+		GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.cloud");
 
-		/*GRAPHICLESS_SHAPES.add("com.gliffy.shape.sitemap.sitemap_v2.page");
-		*/
 
 		GROUP_SHAPES.add("com.gliffy.shape.basic.basic_v1.default.group");
 		GROUP_SHAPES.add("com.gliffy.shape.erd.erd_v1.default.entity_with_attributes");
@@ -148,18 +171,56 @@ public class GliffyObject implements PostDeserializable
 		GROUP_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.object_timeline");
 		GROUP_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.class");
 		GROUP_SHAPES.add("com.gliffy.shape.uml.uml_v1.default.object");
-
+		//ios
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.containers_content.table");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.forms_controls.button_stack");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.forms_controls.alert_2options");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.forms_controls.alert");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.navigation.contextual_menu");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.navigation.nav_3tabs");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.containers_content.title_bar");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.navigation.tab_bar");
+		GROUP_SHAPES.add("com.gliffy.shape.iphone.iphone_ios7.forms_controls.search");
+		//android
+		GROUP_SHAPES.add("com.gliffy.shape.android.android_v1.general.dialog");
+		GROUP_SHAPES.add("com.gliffy.shape.android.android_v1.general.list_1line");
+		GROUP_SHAPES.add("com.gliffy.shape.android.android_v1.general.list_2lines");
+		GROUP_SHAPES.add("com.gliffy.shape.android.android_v1.general.tabs01");
+		GROUP_SHAPES.add("com.gliffy.shape.android.android_v1.general.tabs02");
+		//others
+		GROUP_SHAPES.add("com.gliffy.shape.network.network_v3.business.user_group");
+		//ui
+		GROUP_SHAPES.add("com.gliffy.shape.ui.ui_v3.navigation.navbar");
+		GROUP_SHAPES.add("com.gliffy.shape.ui.ui_v3.navigation.navbar_vertical");
+		GROUP_SHAPES.add("com.gliffy.shape.ui.ui_v3.forms_controls.dropdown");
+		//It is a group but we have one similar
+		//GROUP_SHAPES.add("com.gliffy.shape.ui.ui_v3.forms_controls.audio_controls");
+		
+		GROUP_SHAPES.add("com.gliffy.shape.uml.uml_v2.sequence.recursive_message");
+		
 		MINDMAP_SHAPES.add("com.gliffy.shape.mindmap.mindmap_v1.default.main_topic");
 		MINDMAP_SHAPES.add("com.gliffy.shape.mindmap.mindmap_v1.default.subtopic");
 		MINDMAP_SHAPES.add("com.gliffy.shape.mindmap.mindmap_v1.default.child_node");
 
-		
+		//This map is used to change Gliffy coordinates to match mxGraph ones
+		//Format [xShift, yShift, widthShift, heightShift, DONT REPOSITION TEXT] values between ]-1, 1[ means percentage
 		SHAPES_COORD_FIX.put("com.gliffy.shape.flowchart.flowchart_v1.default.paper_tape", new double[]{0, -0.1, 0, 0.2});
 		SHAPES_COORD_FIX.put("com.gliffy.shape.uml.uml_v1.default.node", new double[]{0, -10, 10, 10});
 		SHAPES_COORD_FIX.put("com.gliffy.shape.uml.uml_v2.deployment.node", new double[]{0, -10, 10, 10});
 		SHAPES_COORD_FIX.put("com.gliffy.shape.uml.uml_v2.deployment.device_node", new double[]{0, -10, 10, 10});
 		SHAPES_COORD_FIX.put("com.gliffy.shape.uml.uml_v2.deployment.execution_environment_node", new double[]{0, -10, 10, 10});
 		SHAPES_COORD_FIX.put("com.gliffy.shape.flowchart.flowchart_v1.default.data_storage", new double[]{0, 0, 0.115, 0});
+		SHAPES_COORD_FIX.put("com.gliffy.shape.flowchart.flowchart_v1.default.database", new double[]{0, 0, 0, 0.15});
+		//these shapes cannot be resized (width is fixed) in Gliffy 
+		SHAPES_COORD_FIX.put("com.gliffy.stencil.entity_lifeline.uml_v2", new double[]{10, 0, -20, 0});
+		SHAPES_COORD_FIX.put("com.gliffy.stencil.boundary_lifeline.uml_v2", new double[]{35, 0, -70, 0});
+		SHAPES_COORD_FIX.put("com.gliffy.stencil.control_lifeline.uml_v2", new double[]{10, 0, -20, 0});
+		
+		//Our browser window has a larger header so increase it
+		SHAPES_COORD_FIX.put("com.gliffy.shape.ui.ui_v3.containers_content.browser", new double[]{0, -40, 0, 40, 1});
+		
+		//There are many shapes where fillColor is the strokeColor
+		FILLCLR_IS_STROKECLR_SHAPES.add("com.gliffy.stencil.rectangle.no_fill_line_bottom_2px_off");
 	}
 
 	public GliffyObject()
@@ -225,21 +286,33 @@ public class GliffyObject implements PostDeserializable
 
 	public String getText()
 	{
-		return graphic.getText().getHtml();
+		GliffyText text = graphic.getText();
+		//TODO These values are hurestics based on analyzing many files. 6 is a range from 2 to 6 so used the maximum
+		int widthDiff = "none".equals(text.overflow)? -3 : 6;
+		return "<div style='width: "+ (width + widthDiff) +"px;height: "+ height +"px;word-break: break-word;'>" + text.getHtml() + "</div>";
 	}
 
+	/**
+	 * Returns the first link child associated with a cell.
+	 * @return
+	 */
 	public String getLink()
 	{
-		if(children == null || children.isEmpty())
+		if (children == null || children.isEmpty())
+		{
 			return null;
+		}
 			
 		Iterator<GliffyObject> it = children.iterator();
 		
-		while(it.hasNext()) 
+		while (it.hasNext()) 
 		{
 			GliffyObject child = it.next();
-			if(child.isLink())
+
+			if (child.isLink())
+			{
 				return child.graphic.getLink().href;
+			}
 		}
 
 		return null;
@@ -257,9 +330,9 @@ public class GliffyObject implements PostDeserializable
 
 	public boolean isGroup()
 	{
-		return (uid != null && (GROUP_SHAPES.contains(uid) || uid.startsWith("com.gliffy.shape.table")))
+		return (hasChildren() && ((uid != null && (GROUP_SHAPES.contains(uid) || uid.startsWith("com.gliffy.shape.table")))
 				//Since we treat text in a different way (added as cell value instead of another child cell, this is probably the best way to detect groups when uid is null)
-				|| (uid == null && hasChildren() && !children.get(0).isText());
+				|| (uid == null && !children.get(0).isText())));
 	}
 	
 	public boolean isSelection() 
@@ -517,7 +590,7 @@ public class GliffyObject implements PostDeserializable
 	
 	public void adjustGeo(mxGeometry geo)
 	{
-		double[] arr = SHAPES_COORD_FIX.get(uid);
+		double[] arr = SHAPES_COORD_FIX.get(uid != null? uid : (graphic != null && graphic.getShape() != null ? graphic.getShape().tid : null));
 		
 		if (arr != null)
 		{
@@ -536,7 +609,7 @@ public class GliffyObject implements PostDeserializable
 	{
 		double[] arr = SHAPES_COORD_FIX.get(uid);
 		
-		if (arr != null)
+		if (arr != null && arr.length == 4)
 		{
 			mxGeometry shifts = getAdjustShifts(arr, x, y, width, height);
 			
@@ -544,4 +617,43 @@ public class GliffyObject implements PostDeserializable
 			textObject.y -= shifts.getY();
 		}
 	}
+	
+	public boolean isUseFillColor4StrokeColor()
+	{
+		return FILLCLR_IS_STROKECLR_SHAPES.contains(uid != null? uid : (graphic != null && graphic.getShape() != null ? graphic.getShape().tid : null));
+	}
+
+	/**
+	 * @return true If gliffyObject is Frame then always stick text on top left corner.
+	 */
+	public boolean containsTextBracket()
+	{
+		return uid != null ? uid.contains("com.gliffy.shape.uml.uml_v2.activity.frame") : false;
+	}
+	
+	/**
+	 * @return
+	 */
+	public String getUmlSequenceCombinedFragmentText() 
+	{
+		if("com.gliffy.shape.uml.uml_v2.sequence.interaction_use".equals(uid))
+		{
+			return "ref";
+		}
+		if("com.gliffy.shape.uml.uml_v2.sequence.opt_combined_fragment".equals(uid)) 
+		{
+			return "opt";
+		}
+		if("com.gliffy.shape.uml.uml_v2.sequence.loop_combined_fragment".equals(uid)) 
+		{
+			return "loop";
+		}
+		if("com.gliffy.shape.uml.uml_v2.sequence.alt_combined_fragment".equals(uid)) 
+		{
+			return "alt";
+		}
+		
+		return null;
+	}
+
 }

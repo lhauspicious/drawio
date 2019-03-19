@@ -37,6 +37,8 @@ var com;
                      * Stores the parents of the shapes imported.
                      */
                     this.parentsMap = ({});
+                    
+                    this.layersMap = ({});
                     /**
                      * Set to true if you want to display spline debug data
                      */
@@ -52,6 +54,100 @@ var com;
                 		}
 
                 		return mxVsdxCodec.vsdxPlaceholder;
+                };
+                
+                mxVsdxCodec.parsererrorNS_$LI$ = function ()
+                {
+            		if (mxVsdxCodec.parsererrorNS == null)
+            		{
+            			mxVsdxCodec.parsererrorNS = "";
+            			
+            			if (window.DOMParser) 
+            			{
+	            			var parser = new DOMParser();
+	            			
+	            			try
+	            			{
+	            				mxVsdxCodec.parsererrorNS = parser.parseFromString('<', 'text/xml').getElementsByTagName("parsererror")[0].namespaceURI;
+	            			}
+	            			catch(e)
+	            			{
+	            				//ignore! IE11 throw an exception on XML syntax error
+	            			}
+            			}
+        			}
+
+            		return mxVsdxCodec.parsererrorNS;
+                };
+                
+                mxVsdxCodec.parseXml = function (xml) 
+                {
+                	try
+                	{
+                		var doc = mxUtils.parseXml(xml);
+                		
+                		if (doc.getElementsByTagNameNS(mxVsdxCodec.parsererrorNS, 'parsererror').length > 0)
+                		{
+                			return null;
+                		}
+                		else
+            			{
+                			return doc;
+            			}
+                	}
+                	catch (e) 
+                	{
+                		//IE11 throw an exception on XML syntax error
+                		return null; 
+                	}
+                };
+                
+                //TODO Optimize this function
+                mxVsdxCodec.decodeUTF16LE = function ( binaryStr ) 
+                {
+                    var cp = "";
+                    for( var i = 0; i < binaryStr.length; i+=2) 
+                    {
+                        cp += String.fromCharCode( 
+                             binaryStr.charCodeAt(i) |
+                            ( binaryStr.charCodeAt(i+1) << 8 )
+                        );
+                    }
+
+                    return cp ;
+                }
+                
+                mxVsdxCodec.prototype.scaleGraph = function(graph, scale) 
+                {
+                    if (scale !== 1) {
+                        var model = graph.getModel();
+                        {
+                            for (var id in model.cells) {
+                                var c = model.cells[id];
+                                {
+                                    var geo = model.getGeometry(c);
+                                    if (geo != null) {
+                                        this.scaleRect(geo, scale);
+                                        this.scaleRect(geo.alternateBounds, scale);
+                                        if (model.isEdge(c)) {
+                                        	this.scalePoint(geo.sourcePoint, scale);
+                                        	this.scalePoint(geo.targetPoint, scale);
+                                        	this.scalePoint(geo.offset, scale);
+                                            var points = geo.points;
+                                            if (points != null) {
+                                                for (var index125 = 0; index125 < points.length; index125++) {
+                                                    var p = points[index125];
+                                                    {
+                                                    	this.scalePoint(p, scale);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 };
                 
                 /**
@@ -101,43 +197,7 @@ var com;
 	                                    var graph_1 = this_1.createMxGraph();
 	                                    graph_1.getModel().beginUpdate();
 	                                    this_1.importPage(page_1, graph_1, graph_1.getDefaultParent());
-	                                    var backPage = page_1.getBackPage();
-	                                    if (backPage != null) {
-	                                        graph_1.getModel().setValue(graph_1.getDefaultParent(), page_1.getPageName());
-	                                        var backCell = new mxCell(backPage.getPageName());
-	                                        graph_1.addCell(backCell, graph_1.getModel().getRoot(), 0, null, null);
-	                                        this_1.importPage(backPage, graph_1, graph_1.getDefaultParent());
-	                                    }
-	                                    var scale = page_1.getPageScale() / page_1.getDrawingScale();
-	                                    if (scale !== 1) {
-	                                        var model = graph_1.getModel();
-	                                        {
-	                                            for (var id in model.cells) {
-	                                                var c = model.cells[id];
-	                                                {
-	                                                    var geo = model.getGeometry(c);
-	                                                    if (geo != null) {
-	                                                        this_1.scaleRect(geo, scale);
-	                                                        this_1.scaleRect(geo.alternateBounds, scale);
-	                                                        if (model.isEdge(c)) {
-	                                                            this_1.scalePoint(geo.sourcePoint, scale);
-	                                                            this_1.scalePoint(geo.targetPoint, scale);
-	                                                            this_1.scalePoint(geo.offset, scale);
-	                                                            var points = geo.points;
-	                                                            if (points != null) {
-	                                                                for (var index125 = 0; index125 < points.length; index125++) {
-	                                                                    var p = points[index125];
-	                                                                    {
-	                                                                        this_1.scalePoint(p, scale);
-	                                                                    }
-	                                                                }
-	                                                            }
-	                                                        }
-	                                                    }
-	                                                }
-	                                            }
-	                                        }
-	                                    }
+	                                    this_1.scaleGraph(graph_1, page_1.getPageScale() / page_1.getDrawingScale());
 	                                    graph_1.getModel().endUpdate();
 	                                    /* append */ (function (sb) { return sb.str = sb.str.concat(_this.RESPONSE_DIAGRAM_START); })(xmlBuilder);
 	                                    /* append */ (function (sb) { return sb.str = sb.str.concat(_this.processPage(graph_1, page_1)); })(xmlBuilder);
@@ -156,7 +216,7 @@ var com;
 	                    //console.log(xmlBuilder.str);
 	                    if (callback) 
 	                    {
-	                    		callback(xmlBuilder.str);
+                     		callback(xmlBuilder.str);
 	                    }
                     };
 
@@ -169,142 +229,205 @@ var com;
 	                    	if (processedFiles == filesCount) 
 	                    	{
 	                    		var dateAfter = new Date();
-	                         //console.log(processedFiles + " File extracted in " + (dateAfter - dateBefore) + "ms");
-	                         allDone();
+		                         //console.log(processedFiles + " File extracted in " + (dateAfter - dateBefore) + "ms");
+		                     	try
+		                    	{
+		                     		allDone();
+		                    	}
+		                    	catch(e)
+		                    	{
+		                    		console.log(e);
+		                    		
+		                    		if (onerror != null) 
+		                    		{
+		                    			onerror();
+		                    		}
+		                    		else
+		                    		{
+		                    			callback("");
+		                    		}
+		                    	}
+
 	                    	}
                     };
                     
                     JSZip.loadAsync(file)                                   
                     .then(function(zip) 
                     {
-                        var dateAfter = new Date();
-                       	//console.log(" (loaded in " + (dateAfter - dateBefore) + "ms)");
-                       	
-                        zip.forEach(function (relativePath, zipEntry) 
-                        {  
-        					var filename = zipEntry.name;
-                        	var name = filename.toLowerCase();
-        					var nameLen = name.length;
-                            if (name.indexOf('.xml') == nameLen - 4 || name.indexOf('.xml.rels') == nameLen - 9) //xml files
-                            {
-                            	filesCount++;
-        	                    zipEntry.async("string").then(function (str) 
-        	                  	{
+                    	if (Object.keys(zip.files).length == 0)
+                    	{
+                    		if (onerror != null)
+                    		{
+                    			onerror();
+                    		}
+                    	}
+                    	else
+                    	{
+	                        var dateAfter = new Date();
+	                       	//console.log(" (loaded in " + (dateAfter - dateBefore) + "ms)");
+	                       	
+	                        zip.forEach(function (relativePath, zipEntry) 
+	                        {  
+	        					var filename = zipEntry.name;
+	                        	var name = filename.toLowerCase();
+	        					var nameLen = name.length;
+	                            if (name.indexOf('.xml') == nameLen - 4 || name.indexOf('.xml.rels') == nameLen - 9) //xml files
+	                            {
+	                            	filesCount++;
+	        	                    zipEntry.async("string").then(function (str) 
+	        	                  	{
         	                    		if (!(str.length === 0)) {
-        	    						//UTF-8 BOM causes exception while parsing, so remove it
-        	    						//TODO is the text encoding will be correct or string must be re-read as UTF-8?
-                                        if ((function (str, searchString, position) {
-                                            if (position === void 0) { position = 0; }
-                                            return str.substr(position, searchString.length) === searchString;
-                                        })(str, "\u00ef\u00bb\u00bf"))
-                                            str = str.substring(3);
-                                        var doc = mxUtils.parseXml(str);
-                                        if (doc == null) { //FIXME TODO find a way to change encoding in javascript
-//                                            var outBytes = out.toByteArray();
-//                                            if (outBytes[1] === 0 && outBytes[3] === 0 && outBytes[5] === 0) {
-//                                                str = out.toString("UTF-16LE");
-//                                                doc = mxUtils.parseXml(str);
-//                                            }
-                                        	//TODO add any other non-standard encoding that may be needed 
-                                        }
-                                        doc.vsdxFileName = filename;
-                                        /* put */ (docData[filename] = doc);
-                                    }
-	        	                    	processedFiles++;
-	
-	        	                    	doneCheck();
-        	                   	});
-                            }
-                            else if (name.indexOf(mxVsdxCodec.vsdxPlaceholder + "/media") === 0)//binary files
-                           	{
-                            	filesCount++;
-                            	if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".emf")) {
-                            		if (JSZip.support.uint8array) 
-                            		{
-		                            	zipEntry.async("uint8array").then(function (emfData) 
-		           	                  	{
-	                                        var imageFound = false;
-	                                        var base64Str = "";
-	                                        for (var i = 0; i < emfData.length - 8; i++) {
-	                                            if (_this.isPng(emfData, i) || _this.isJpg(emfData, i)) {
-	                                            	base64Str = com.mxgraph.online.mxBase64.encodeToString(emfData, i);
-	                                                imageFound = true;
-	                                                break;
-	                                            }
+	        	    						//UTF-8 BOM causes exception while parsing, so remove it
+	        	    						//TODO is the text encoding will be correct or string must be re-read as UTF-8?
+	                                        if (str.charCodeAt(0) == 65279)
+                                        	{
+	                                            str = str.substring(1);
+                                        	}
+	                                        
+	                                        var doc = mxVsdxCodec.parseXml(str);
+	                                        
+	                                        if (doc == null) 
+	                                        {
+	                                        	if (str.charCodeAt(1) === 0 && str.charCodeAt(3) === 0 && str.charCodeAt(5) === 0)
+                                        		{
+	                                        		doc = mxVsdxCodec.parseXml(mxVsdxCodec.decodeUTF16LE(str));
+                                        		}
+	                                        	//TODO add any other non-standard encoding that may be needed 
 	                                        }
-	                                        ;
-	                                        if (imageFound) {
-	    	                                    /* put */ (mediaData[filename] = base64Str);
-	                                        }
+	                                        
+	                                        if (doc != null)
+                                        	{
+		                                        doc.vsdxFileName = filename;
+		                                        /* put */ (docData[filename] = doc);
+                                        	}
+	                                    }
+		        	                    	processedFiles++;
 		
-		        	                    	processedFiles++;
-	
 		        	                    	doneCheck();
-		           	                   	});
-                            		}
-                            	}
-                            	else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
-                            		if (JSZip.support.uint8array) 
-                            		{
-		                            	zipEntry.async("uint8array").then(function (bmpData) 
-		           	                  	{
-		                            		var bitmap = new BmpDecoder(bmpData);
-		                            		
-		                            		var c = document.createElement("canvas");
-		                            		c.width = bitmap.width;
-		                              	  	c.height = bitmap.height;
-		                            		var ctx = c.getContext("2d");
-		                            		ctx.putImageData(bitmap.imageData, 0, 0);
-		                            		var jpgData = c.toDataURL("image/jpeg");
-                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
+	        	                   	});
+	                            }
+	                            else if (name.indexOf(mxVsdxCodec.vsdxPlaceholder + "/media") === 0)//binary files
+	                           	{
+	                            	filesCount++;
+	                            	if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".emf")) 
+	                            	{
+                            			var emfDone = function()
+                            			{
+                            				processedFiles++;
+                            				
+		        	                    	doneCheck();
+                            			}
+                            			
+	                            		if (JSZip.support.blob && window.EMF_CONVERT_URL) 
+	                            		{
+	                            			zipEntry.async("blob").then(function (emfBlob)
+			           	                  	{
+	                            				//send to emf conversion service
+	                        					var formData = new FormData();
+	                        					formData.append('img', emfBlob, name);
 
-		        	                    	processedFiles++;
-		        	                    	doneCheck();
+	                        					var xhr = new XMLHttpRequest();
+	                        					xhr.open('POST', EMF_CONVERT_URL);
+	                        					xhr.responseType = 'blob';
+	                        					
+	                        					xhr.onreadystatechange = mxUtils.bind(this, function()
+	                        					{
+	                        						if (xhr.readyState == 4)
+	                        						{	
+	                        							if (xhr.status >= 200 && xhr.status <= 299)
+	                        							{
+	                        								try
+	                        								{
+	                        									var reader = new FileReader();
+	                        									reader.readAsDataURL(xhr.response); 
+	                        									reader.onloadend = function() {
+	                        									    mediaData[filename] = reader.result.substr(22); //data:image/png;base64, is 23 character
+		                        									emfDone();
+	                        									}
+	                        								}
+	                        								catch (e)
+	                        								{
+	                        									console.log(e);
+	                        									emfDone();
+	                        								}
+	                        							}
+	                        							else
+	                        							{
+	                        								emfDone();
+	                        							}
+	                        						}
+	                        					});
+	                        					
+	                        					xhr.send(formData);
+			           	                  	});
+	                            		}
+	                            		else
+                            			{
+	                            			emfDone();
+                            			}
+	                            	}
+	                            	else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
+	                            		if (JSZip.support.uint8array) 
+	                            		{
+			                            	zipEntry.async("uint8array").then(function (bmpData) 
+			           	                  	{
+			                            		var bitmap = new BmpDecoder(bmpData);
+			                            		
+			                            		var c = document.createElement("canvas");
+			                            		c.width = bitmap.width;
+			                              	  	c.height = bitmap.height;
+			                            		var ctx = c.getContext("2d");
+			                            		ctx.putImageData(bitmap.imageData, 0, 0);
+			                            		var jpgData = c.toDataURL("image/jpeg");
+	                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
+	
+			        	                    	processedFiles++;
+			        	                    	doneCheck();
+			           	                   	});
+	                            		}
+	                            	}
+	                            	else
+	                            	{
+		                            	zipEntry.async("base64").then(function (base64Str) 
+		           	                  	{
+	//	                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
+	//	                                        try 
+	//	                                        {
+	//	    	                            		//convert BMP files to PNG
+	//		                                    	var bmpImg = new Image();
+	//		                                        
+	//		                                        bmpImg.onload = function() {
+	//		                                            var c = document.createElement("canvas");
+	//		                                            c.width = bmpImg.width;
+	//		                                            c.height = bmpImg.height;
+	//		                                            var ctx = c.getContext("2d");
+	//		                                            ctx.drawImage(bmpImg, 0, 0);
+	//		                                            var jpgData = c.toDataURL("image/jpeg");
+	//		                                            
+	//		                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
+	//		                                            
+	//		                                            processedFiles++;
+	//		                                            doneCheck();
+	//		                                        };
+	//	
+	//		                                        bmpImg.src = "data:image/bmp;base64," + base64Str;
+	//	                                        }
+	//	                                        catch (e) {} //conversion failed. Nothing can be done!
+	//	                                    }
+	//	                                    else 
+	//	                                    {
+			                                    /* put */ (mediaData[filename] = base64Str);
+			                                	
+			        	                    	processedFiles++;
+			        	                    	doneCheck();
+	//	                                    }
 		           	                   	});
-                            		}
-                            	}
-                            	else
-                            	{
-	                            	zipEntry.async("base64").then(function (base64Str) 
-	           	                  	{
-//	                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
-//	                                        try 
-//	                                        {
-//	    	                            		//convert BMP files to PNG
-//		                                    	var bmpImg = new Image();
-//		                                        
-//		                                        bmpImg.onload = function() {
-//		                                            var c = document.createElement("canvas");
-//		                                            c.width = bmpImg.width;
-//		                                            c.height = bmpImg.height;
-//		                                            var ctx = c.getContext("2d");
-//		                                            ctx.drawImage(bmpImg, 0, 0);
-//		                                            var jpgData = c.toDataURL("image/jpeg");
-//		                                            
-//		                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
-//		                                            
-//		                                            processedFiles++;
-//		                                            doneCheck();
-//		                                        };
-//	
-//		                                        bmpImg.src = "data:image/bmp;base64," + base64Str;
-//	                                        }
-//	                                        catch (e) {} //conversion failed. Nothing can be done!
-//	                                    }
-//	                                    else 
-//	                                    {
-		                                    /* put */ (mediaData[filename] = base64Str);
-		                                	
-		        	                    	processedFiles++;
-		        	                    	doneCheck();
-//	                                    }
-	           	                   	});
-                            	}
-                           	}
-                        });
+	                            	}
+	                           	}
+	                        });
+                    	}
                     }, function (e) {
                     		//console.log("Error!" + e.message);
-                    		
                     		if (onerror != null)
                     		{
                     			onerror(e);
@@ -334,14 +457,8 @@ var com;
                         output += "<diagram name=\"" + pageName_1 + "\">";
                     }
                     
-                    output += Graph.prototype.compress(modelString);
+                    output += Graph.compress(modelString);
                     return output;
-                };
-                /*private*/ mxVsdxCodec.prototype.isJpg = function (emfData, i) {
-                    return emfData[i] === (255 | 0) && emfData[i + 1] === (216 | 0) && emfData[i + 2] === (255 | 0);
-                };
-                /*private*/ mxVsdxCodec.prototype.isPng = function (emfData, i) {
-                    return emfData[i] === (137 | 0) && emfData[i + 1] === (80 | 0) && emfData[i + 2] === (78 | 0) && emfData[i + 3] === (71 | 0) && emfData[i + 4] === (13 | 0) && emfData[i + 5] === (10 | 0) && emfData[i + 6] === (26 | 0) && emfData[i + 7] === (10 | 0);
                 };
                 /**
                  * Scale a point in place
@@ -449,7 +566,44 @@ var com;
                  * @param {*} parent The parent of the elements to be imported.
                  * @return {number}
                  */
-                mxVsdxCodec.prototype.importPage = function (page, graph, parent) {
+                mxVsdxCodec.prototype.importPage = function (page, graph, parent) 
+                {
+                	//BackPages can include another backPage, so it is recursive
+                	var backPage = page.getBackPage();
+                    
+                	if (backPage != null) 
+                    {
+                        graph.getModel().setValue(graph.getDefaultParent(), page.getPageName());
+                        var backCell = new mxCell(backPage.getPageName());
+                        graph.addCell(backCell, graph.getModel().getRoot(), 0, null, null);
+                        this.importPage(backPage, graph, graph.getDefaultParent());
+                    }
+                	
+                	//add page layers
+                	var layers = page.getLayers();
+                	this.layersMap[0] = graph.getDefaultParent();
+                	
+                	if (layers.length > 1)
+            		{
+                		for (var k = 1; k < layers.length; k++)
+	            		{
+                			var layer = layers[k];
+                			var layerCell = new mxCell();		
+                			layerCell.setVisible(layer.Visible == 1);
+
+                			if (layer.Lock == 1)
+                			{
+                				layerCell.setStyle("locked=1;");
+                			}
+                			
+                			//TODO handlle color and other properties
+                			layerCell.setValue(layer.Name);
+                			
+                			this.layersMap[k] = layerCell;
+                    		graph.addCell(layerCell, graph.model.root, k);
+	            		}
+            		}
+                	//add shapes
                     var shapes = page.getShapes();
                     var entries = (function (a) { var i = 0; return { next: function () { return i < a.length ? a[i++] : null; }, hasNext: function () { return i < a.length; } }; })(/* entrySet */ (function (m) { if (m.entries == null)
                         m.entries = []; return m.entries; })(shapes));
@@ -457,7 +611,9 @@ var com;
                     var pageId = page.getId();
                     while ((entries.hasNext())) {
                         var entry = entries.next();
-                        this.addShape(graph, entry.getValue(), parent, pageId, pageHeight);
+                        var shape = entry.getValue();
+                        var p = this.layersMap[shape.layerMember];
+                        this.addShape(graph, shape, p? p : parent, pageId, pageHeight);
                     }
                     ;
                     var connects = page.getConnects();
@@ -672,6 +828,14 @@ var com;
                         }
                         ;
                     }
+                    
+                    /* put */ (function (m, k, v) { if (m.entries == null)
+                    m.entries = []; for (var i = 0; i < m.entries.length; i++)
+                    if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
+                        m.entries[i].value = v;
+                        return;
+                    } m.entries.push({ key: k, value: v, getKey: function () { return this.key; }, getValue: function () { return this.value; } }); })(this.vertexMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, shape.getId()), group);
+                    
                     return group;
                 };
                 mxVsdxCodec.rotatedEdgePoint = function (pt, rotation, cx, cy) {
@@ -738,6 +902,27 @@ var com;
                     }
                     return null;
                 };
+                
+                
+                mxVsdxCodec.calculateAbsolutePoint = function (cell) 
+                {
+                    var x = 0, y = 0;
+                    while (cell != null)
+                    {
+                        var geo = cell.geometry;
+
+                        if (geo != null) 
+                        {
+                            x += geo.x;
+                            y += geo.y;                
+                        }
+                        cell = cell.parent;
+                    }
+
+                    return new mxPoint(x, y);
+                }
+                
+
                 /**
                  * Adds a connected edge to the graph.
                  * These edged are the referenced in one Connect element at least.
@@ -774,24 +959,66 @@ var com;
                     var endXY = edgeShape.getEndXY(parentHeight);
                     var points = edgeShape.getRoutingPoints(parentHeight, beginXY, edgeShape.getRotation());
                     this.rotateChildEdge(graph.getModel(), parent, beginXY, endXY, points);
+                    var fromConstraint = null;
                     var sourceSheet = connect.getSourceToSheet();
                     var source = sourceSheet != null ? (function (m, k) { if (m.entries == null)
                         m.entries = []; for (var i = 0; i < m.entries.length; i++)
                         if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
                             return m.entries[i].value;
                         } return null; })(this.vertexMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, sourceSheet)) : null;
-                    if (source == null) {
+                    
+                    var removeFirstPt = true;
+                    if (source == null) 
+                    {
                         source = graph.insertVertex(parent, null, null, Math.floor(Math.round(beginXY.x * 100) / 100), Math.floor(Math.round(beginXY.y * 100) / 100), 0, 0);
                     }
+                    else if (source.style && source.style.indexOf(';rotation=') == -1)
+            		{
+                        var absOriginFrom = mxVsdxCodec.calculateAbsolutePoint(source);
+                        var absBeginXY = mxVsdxCodec.calculateAbsolutePoint(parent);
+                        var srcGeo = source.geometry;
+                        fromConstraint = new mxPoint(
+                                (absBeginXY.x + beginXY.x - absOriginFrom.x)
+                                        / srcGeo.width,
+                                (absBeginXY.y + beginXY.y - absOriginFrom.y)
+                                        / srcGeo.height);
+                        //TODO fromConstraint rotation support
+            		}
+                    else
+                	{
+                    	removeFirstPt = false;
+                	}
+                    
+                    var toConstraint = null;
                     var toSheet = connect.getTargetToSheet();
                     var target = toSheet != null ? (function (m, k) { if (m.entries == null)
                         m.entries = []; for (var i = 0; i < m.entries.length; i++)
                         if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
                             return m.entries[i].value;
                         } return null; })(this.vertexMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, toSheet)) : null;
-                    if (target == null) {
+                    
+                    var removeLastPt = true;
+                    if (target == null) 
+                    {
                         target = graph.insertVertex(parent, null, null, Math.floor(Math.round(endXY.x * 100) / 100), Math.floor(Math.round(endXY.y * 100) / 100), 0, 0);
                     }
+                    else if (target.style && target.style.indexOf(';rotation=') == -1)
+            		{
+                        var absOriginTo = mxVsdxCodec.calculateAbsolutePoint(target);
+                        var absEndXY = mxVsdxCodec.calculateAbsolutePoint(parent);
+                        var trgGeo = target.geometry;
+                        toConstraint = new mxPoint(
+                                (absEndXY.x + endXY.x - absOriginTo.x)
+                                        / trgGeo.width,
+                                (absEndXY.y + endXY.y - absOriginTo.y)
+                                        / trgGeo.height);
+                        //TODO toConstraint rotation support
+            		}
+                    else 
+                    {
+                    	removeLastPt = false;
+                    }
+                    
                     var styleMap = edgeShape.getStyleFromEdgeShape(parentHeight);
                     var edge;
                     var rotation = edgeShape.getRotation();
@@ -811,8 +1038,62 @@ var com;
                         edge = graph.insertEdge(parent, null, edgeShape.getTextLabel(), source, target, com.mxgraph.io.vsdx.mxVsdxUtils.getStyleString(styleMap, "="));
                         var lblOffset = edgeShape.getLblEdgeOffset(graph.getView(), points);
                         edge.getGeometry().offset = (lblOffset);
+                        
+                        //add entry/exit points when edge, src, and trg are not rotated
+                        if (fromConstraint != null)
+            			{
+            				graph.setConnectionConstraint(edge, source, true,
+            						new mxConnectionConstraint(fromConstraint, false));
+            			}
+                        
+                        if (removeFirstPt)
+                    	{
+	                        points.shift();
+                    	}
+                        
+            			if (toConstraint != null)
+            			{
+            				graph.setConnectionConstraint(edge, target, false,
+            						new mxConnectionConstraint(toConstraint, false));
+            			}
+            			
+            			if (removeLastPt)
+        				{
+	        				points.pop();
+                        }
                     }
                     var edgeGeometry = graph.getModel().getGeometry(edge);
+                    
+                    //when source.parent != target.parent the front end will change the edge parent to parent 1 but waypoints are not corrected
+                    if (source.parent != target.parent && parent != null && parent.id != 1 && source.parent.id == 1)
+                	{
+                    	var accX = 0;
+                    	var accY = 0;
+                    	
+                    	var prnt = parent;
+                    	
+                    	do 
+                    	{
+                        	var prntGeo = prnt.geometry;
+                        	
+                            if (prntGeo != null) 
+                            {
+                            	accX += prntGeo.x;
+                            	accY += prntGeo.y;
+                            }
+                            prnt = prnt.parent;
+                    	}
+                    	while(prnt != null);
+                    	
+                    	edge.parent = source.parent;
+                    	
+                    	for (var i = 0; i < points.length; i++)
+                		{
+                    		points[i].x += accX;
+                    		points[i].y += accY;
+                		}
+                	}
+                    
                     edgeGeometry.points = (points);
                     if (styleMap.hasOwnProperty("curved") && (function (o1, o2) { if (o1 && o1.equals) {
                         return o1.equals(o2);
@@ -879,6 +1160,9 @@ var com;
                     }
                     this.rotateChildEdge(graph.getModel(), parent, beginXY, endXY, points);
                     var edgeGeometry = graph.getModel().getGeometry(edge);
+                    //remove begin/end points from points array
+                    points.pop();
+                    points.shift();
                     edgeGeometry.points = (points);
                     edgeGeometry.setTerminalPoint(beginXY, true);
                     edgeGeometry.setTerminalPoint(endXY, false);
@@ -977,7 +1261,7 @@ var com;
                     _this.RESPONSE_HEADER = "";
                     return _this;
                 }
-                mxVssxCodec.prototype.decodeVssx = function (file, callback, charset) {
+                mxVssxCodec.prototype.decodeVssx = function (file, callback, charset, onerror) {
                 	var _this = this;
                     var library = { str: "<mxlibrary>[", toString: function () { return this.str; } };
                     this.decodeVsdx(file, function(shapesInPages) 
@@ -998,6 +1282,29 @@ var com;
                                         var shapeGraph = this_1.createMxGraph();
                                         var shapeElem = master.getMasterShape().getShape();
                                         var shape = new com.mxgraph.io.vsdx.VsdxShape(page, shapeElem, !page.isEdge(shapeElem), masterShapes, null, this_1.vsdxModel);
+                                        
+                                        var scale = 1;
+                                        
+                                        if (master.pageSheet != null)
+                                    	{
+                                        	 var dScaleV = 1, pScaleV = 1;
+                                        	 var dScale = master.pageSheet["DrawingScale"];
+                                             
+                                        	 if (dScale != null) 
+                                             {
+                                        		 dScaleV = parseFloat(dScale.getAttribute("V")) || 1;
+                                             }
+                                             
+                                        	 var pScale = master.pageSheet["PageScale"];
+                                             
+                                        	 if (pScale != null) 
+                                             {
+                                        		 pScaleV = parseFloat(pScale.getAttribute("V")) || 1;
+                                             }
+                                        	 
+                                        	 scale = pScaleV / dScaleV;
+                                    	}
+                                        
                                         var cell = null;
                                         if (shape.isVertex()) {
                                             /* clear */ this_1.edgeShapeMap.entries = [];
@@ -1023,6 +1330,7 @@ var com;
                                             cell = this_1.addUnconnectedEdge(shapeGraph, null, shape, 1169);
                                         }
                                         if (cell != null) {
+                                        	this_1.scaleGraph(shapeGraph, scale);
                                             var geo_1 = this_1.normalizeGeo(cell);
                                             this_1.sanitiseGraph(shapeGraph);
                                             if (shapeGraph.getModel().getChildCount(shapeGraph.getDefaultParent()) === 0)
@@ -1041,7 +1349,7 @@ var com;
                                         	{
                                             	shapeName_1 = "";
                                         	}
-                                            shapeName_1 = JSON.stringify(shapeName_1);
+                                            shapeName_1 = JSON.stringify(mxUtils.htmlEntities(shapeName_1));
                                             /* append */ (function (sb) { return sb.str = sb.str.concat(shapeName_1); })(shapes_1);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat("}"); })(shapes_1);
                                             comma_1 = ",";
@@ -1058,7 +1366,21 @@ var com;
                         /* append */ (function (sb) { return sb.str = sb.str.concat("]</mxlibrary>"); })(library);
                         if (callback)
                     	{
-                        	callback(library.str);
+	                    	try
+	                    	{
+	                    		callback(library.str);
+	                    	}
+	                    	catch(e)
+	                    	{
+	                    		if (onerror != null) 
+	                    		{
+	                    			onerror(e);
+	                    		}
+	                    		else
+	                    		{
+	                    			callback("");
+	                    		}
+	                    	}
                     	}
                     }, charset);
                 };
@@ -1230,7 +1552,7 @@ var com;
                         }
                         /*private*/ RowFactory.getIndex = function (elem) {
                             try {
-                                return parseInt(elem.getAttribute("IX"));
+                                return parseInt(elem.getAttribute("IX")) || 1;
                             }
                             catch (e) {
                                 return 1;
@@ -1240,7 +1562,10 @@ var com;
                         /*private*/ RowFactory.getDoubleVal = function (val) {
                             try {
                                 if (val != null && !(val.length === 0)) {
-                                    return parseFloat(val);
+                                    var fVal = parseFloat(val);
+                                    
+                                    if (isFinite(fVal))
+                                    	return fVal;
                                 }
                             }
                             catch (e) {
@@ -1836,7 +2161,7 @@ var com;
                     }
                     mxVsdxGeometry.prototype.getIndex$org_w3c_dom_Element = function (elem) {
                         try {
-                            return parseInt(elem.getAttribute("IX"));
+                            return parseInt(elem.getAttribute("IX")) || 0;
                         }
                         catch (e) {
                             return 0;
@@ -2310,7 +2635,17 @@ var com;
                                     }
                                     ;
                                 }
-                            }
+                            } 
+                            else if (child.nodeType == 1 && child.nodeName == "PageSheet")
+                        	{
+                            	this.pageSheet = {};
+                            	var cells = com.mxgraph.io.vsdx.mxVsdxUtils.getDirectChildNamedElements(child, "Cell");
+                                
+                            	for (var i = 0; i < cells.length; i++) 
+                                {
+                                    this.pageSheet[cells[i].getAttribute("N")] = cells[i];
+                                }
+                        	}
                             child = child.nextSibling;
                         }
                         ;
@@ -2643,16 +2978,14 @@ var com;
                                                     var entry = array132[index131];
                                                     {
                                                         var page = entry.getValue();
-                                                        if (!page.isBackground()) {
-                                                            var backId = page.getBackPageId();
-                                                            if (backId != null) {
-                                                                var background = (function (m, k) { if (m.entries == null)
-                                                                    m.entries = []; for (var i = 0; i < m.entries.length; i++)
-                                                                    if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
-                                                                        return m.entries[i].value;
-                                                                    } return null; })(backgroundMap, backId);
-                                                                page.setBackPage(background);
-                                                            }
+                                                        var backId = page.getBackPageId();
+                                                        if (backId != null) {
+                                                            var background = (function (m, k) { if (m.entries == null)
+                                                                m.entries = []; for (var i = 0; i < m.entries.length; i++)
+                                                                if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
+                                                                    return m.entries[i].value;
+                                                                } return null; })(backgroundMap, backId);
+                                                            page.setBackPage(background);
                                                         }
                                                     }
                                                 }
@@ -2761,6 +3094,7 @@ var com;
                         this.cellElements = ({});
                         this.model = model;
                         this.pageElement = pageElem;
+                        this.layers = [];
                         var backGround = pageElem.getAttribute(com.mxgraph.io.vsdx.mxVsdxConstants.BACKGROUND);
                         this.__isBackground = (backGround != null && (function (o1, o2) { if (o1 && o1.equals) {
                             return o1.equals(o2);
@@ -2769,7 +3103,7 @@ var com;
                             return o1 === o2;
                         } })(backGround, com.mxgraph.io.vsdx.mxVsdxConstants.TRUE)) ? true : false;
                         var back = pageElem.getAttribute(com.mxgraph.io.vsdx.mxVsdxConstants.BACK_PAGE);
-                        if (!this.__isBackground && back != null && back.length > 0) {
+                        if (back != null && back.length > 0) {
                             this.backPageId = parseFloat(back);
                         }
                         this.Id = parseFloat(pageElem.getAttribute(com.mxgraph.io.vsdx.mxVsdxConstants.ID));
@@ -2784,6 +3118,30 @@ var com;
                                     var n = cellElem.getAttribute("N");
                                     /* put */ (this.cellElements[n] = cellElem);
                                 }
+                            }
+                            
+                            var sections = com.mxgraph.io.vsdx.mxVsdxUtils.getDirectChildNamedElements(pageSheet, "Section");
+                            for (var i134 = 0; i134 < sections.length; i134++) 
+                            {
+                            	var secElem = sections[i134];
+                            	var n = secElem.getAttribute("N");
+                            	
+                            	if (n == "Layer")
+                        		{
+                            		 var layers = com.mxgraph.io.vsdx.mxVsdxUtils.getDirectChildNamedElements(secElem, "Row");
+                            		 
+                            		 for (var i135 = 0; i135 < layers.length; i135++)
+                        			 {
+                            			 var layerAtts = com.mxgraph.io.vsdx.mxVsdxUtils.getDirectChildNamedElements(layers[i135], "Cell");
+                            			 var layerObj = {};
+                            			 
+                            			 for (var i136 = 0; i136 < layerAtts.length; i136++)
+                            			 {
+                            				 layerObj[layerAtts[i136].getAttribute("N")] = layerAtts[i136].getAttribute("V");
+                            			 }
+                            			 this.layers[parseInt(layers[i135].getAttribute("IX"))] = layerObj;
+                        			 }
+                        		}
                             }
                         }
                         this.parseNodes(pageElem, model, "pages");
@@ -3062,6 +3420,9 @@ var com;
                     };
                     mxVsdxPage.prototype.getShapes = function () {
                         return this.shapes;
+                    };
+                    mxVsdxPage.prototype.getLayers = function () {
+                        return this.layers;
                     };
                     mxVsdxPage.prototype.getConnects = function () {
                         return this.connects;
@@ -8124,7 +8485,7 @@ var com;
                             else {
                                 return o1 === o2;
                             } })(iType, "MetaFile")) {
-                                compression = "x-wmf";
+                                compression = "png"; //we convert emf files to png
                             }
                             else if ((function (o1, o2) { if (o1 && o1.equals) {
                                 return o1.equals(o2);
@@ -8137,7 +8498,7 @@ var com;
                             else {
                                 return o1 === o2;
                             } })(iType, "EnhMetaFile")) {
-                                compression = "x-emf";
+                                compression = "png"; //we convert emf files to png
                             }
                             else {
                                 return;
@@ -8191,15 +8552,6 @@ var com;
 	                                                    /* put */ (this.imageData["iData"] = iData);
 	                                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(target.toLowerCase(), ".bmp")) {
 	                                                        compression = "jpg";
-	                                                    }
-	                                                    else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(target.toLowerCase(), ".emf")) {
-	                                                        compression = (function (str, searchString, position) {
-	                                                            if (position === void 0) { position = 0; }
-	                                                            return str.substr(position, searchString.length) === searchString;
-	                                                        })(iData, "iVBORw0K") ? "png" : ((function (str, searchString, position) {
-	                                                            if (position === void 0) { position = 0; }
-	                                                            return str.substr(position, searchString.length) === searchString;
-	                                                        })(iData, "/9j/") ? "jpg" : compression);
 	                                                    }
 	                                                    /* put */ (this.imageData["iType"] = compression);
                                                 	}
@@ -8274,7 +8626,7 @@ var com;
                                             var cell = cells[index158];
                                             {
                                                 n = cell.getAttribute("N");
-                                                var v = cell.getAttribute("V");
+                                                var v = cell.getAttribute("V") || cell.textContent || "";
                                                 switch ((n)) {
                                                     case "Value":
                                                         value = v;
@@ -8953,6 +9305,7 @@ var com;
                         }
                         _this.vertex = vertex || (_this.childShapes != null && !(function (m) { if (m.entries == null)
                             m.entries = []; return m.entries.length == 0; })(_this.childShapes)) || (_this.geomList != null && (!_this.geomList.isNoFill()  || _this.geomList.getGeoCount() > 1));
+                        _this.layerMember = _this.getValue(_this.getCellElement$java_lang_String("LayerMember"));
                         return _this;
                     }
                     VsdxShape.__static_initialize = function () { if (!VsdxShape.__static_initialized) {
@@ -10352,9 +10705,9 @@ var com;
                             var yS = "-0.4";
                             if (control != null) {
                                 xEl = control.getElementsByTagName(com.mxgraph.io.vsdx.mxVsdxConstants.X).item(0);
-                                xS = xEl.getAttribute("F");
+                                xS = xEl.getAttribute("F") || "";
                                 yEl = control.getElementsByTagName(com.mxgraph.io.vsdx.mxVsdxConstants.Y).item(0);
-                                yS = yEl.getAttribute("F");
+                                yS = yEl.getAttribute("F") || "";
                             }
                             var geometry_4 = vertex.getGeometry();
                             xS = xS.split("Width/2+").join("");
@@ -10452,7 +10805,7 @@ var com;
                                     return result;
                                 }
                                 
-                                var enc = Graph.prototype.compress(parsedGeom);
+                                var enc = Graph.compress(parsedGeom);
                                 /* put */ (result[mxConstants.STYLE_SHAPE] = "stencil(" + enc + ")");
                             }
                             catch (e) {
@@ -10744,7 +11097,7 @@ var com;
                                 var firstNURBS = firstGeom.getElementsByTagName(com.mxgraph.io.vsdx.mxVsdxConstants.NURBS_TO).item(0);
                                 var firstE = firstNURBS.getElementsByTagName("E").item(0);
                                 if (firstE != null) {
-                                    var f = firstE.getAttribute("F");
+                                    var f = firstE.getAttribute("F") || "";
                                     f = f.replace(new RegExp("NURBS\\(", 'g'), "");
                                     f = f.replace(new RegExp("\\)", 'g'), "");
                                     f = f.replace(new RegExp(",", 'g'), " ");
@@ -11555,12 +11908,13 @@ com.mxgraph.io.vsdx.mxVsdxConstants.SET_VALUES_$LI$();
 com.mxgraph.io.vsdx.mxPropertiesManager.defaultColors_$LI$();
 com.mxgraph.io.vsdx.mxPropertiesManager.__static_initialize();
 com.mxgraph.io.mxVsdxCodec.vsdxPlaceholder_$LI$();
+com.mxgraph.io.mxVsdxCodec.parsererrorNS_$LI$();
 
 EditorUi.prototype.doImportVisio = function(file, done, onerror)
 {
-	if (file.name != null && /(\.vssx)($|\?)/i.test(file.name))
+	if (file.name != null && /(\.vs(x|sx?))($|\?)/i.test(file.name))
 	{
-		new com.mxgraph.io.mxVssxCodec().decodeVssx(file, done);
+		new com.mxgraph.io.mxVssxCodec().decodeVssx(file, done, null, onerror);
 	}
 	else
 	{

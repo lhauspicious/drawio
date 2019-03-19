@@ -45,6 +45,8 @@ public class Graphic
 		public Integer endArrow;
 
 		public String interpolationType;
+		
+		public Integer cornerRadius;
 
 		public List<float[]> controlPath = new ArrayList<float[]>();
 	}
@@ -64,6 +66,18 @@ public class Graphic
 		public int shadowY;
 
 		public float opacity;
+
+		/**
+		 * @return true if there is no_fill string found in this element
+		 */
+		public boolean isNoFill()
+		{
+			if (tid != null)
+			{
+				return tid.contains("no_fill");
+			}
+			return false;
+		}
 
 	}
 
